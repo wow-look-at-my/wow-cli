@@ -1,0 +1,334 @@
+#!/usr/bin/env sh
+# wow - package manager for programs using the go-toolchain autorelease pattern
+#
+# Programs following this pattern publish GitHub releases with assets named:
+#   <binary>_linux_amd64
+#   <binary>_linux_arm64
+#   <binary>_darwin_amd64
+#   <binary>_darwin_arm64
+#   <binary>_windows_amd64.exe
+#   <binary>_windows_arm64.exe
+
+set -eu
+
+# ---- directories ---------------------------------------------------------
+
+WOW_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}/wow"
+WOW_BIN="${HOME}/.local/bin"
+WOW_PACKAGES="${WOW_HOME}/packages"
+
+# ---- platform detection --------------------------------------------------
+
+detect_platform() {
+    _uname_s=$(uname -s 2>/dev/null || true)
+    case "${_uname_s}" in
+        Linux*)   WOW_OS=linux ;;
+        Darwin*)  WOW_OS=darwin ;;
+        MINGW*|MSYS*|CYGWIN*) WOW_OS=windows ;;
+        *) die "unsupported OS: ${_uname_s}" ;;
+    esac
+
+    _uname_m=$(uname -m 2>/dev/null || true)
+    case "${_uname_m}" in
+        x86_64|amd64)  WOW_ARCH=amd64 ;;
+        aarch64|arm64) WOW_ARCH=arm64 ;;
+        *) die "unsupported architecture: ${_uname_m}" ;;
+    esac
+
+    if [ "${WOW_OS}" = "windows" ]; then
+        WOW_EXT=".exe"
+    else
+        WOW_EXT=""
+    fi
+}
+
+# ---- utilities -----------------------------------------------------------
+
+die() {
+    printf 'error: %s\n' "$*" >&2
+    exit 1
+}
+
+info() {
+    printf '%s\n' "$*"
+}
+
+# Download URL to file, preferring curl over wget
+download() {
+    _dl_url="$1"
+    _dl_dest="$2"
+    if command -v curl >/dev/null 2>&1; then
+        curl -sfL --retry 3 --retry-delay 2 -o "${_dl_dest}" "${_dl_url}" || \
+            die "download failed: ${_dl_url}"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q -O "${_dl_dest}" "${_dl_url}" || die "download failed: ${_dl_url}"
+    else
+        die "curl or wget is required"
+    fi
+}
+
+# Fetch URL to stdout
+fetch() {
+    _fetch_url="$1"
+    if command -v curl >/dev/null 2>&1; then
+        curl -sfL "${_fetch_url}" || die "fetch failed: ${_fetch_url}"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q -O - "${_fetch_url}" || die "fetch failed: ${_fetch_url}"
+    else
+        die "curl or wget is required"
+    fi
+}
+
+# Resolve the latest release tag for owner/repo by following the redirect
+get_latest_tag() {
+    _glt_slug="$1"
+    _glt_url="https://github.com/${_glt_slug}/releases/latest"
+    if command -v curl >/dev/null 2>&1; then
+        # Follow redirect and extract final URL, then strip everything up to /tag/
+        _glt_tag=$(curl -sfLI -o /dev/null -w '%{url_effective}' "${_glt_url}" 2>/dev/null | \
+            sed 's|.*/tag/||') || true
+    else
+        # Fallback: hit the API and extract tag_name with grep
+        _glt_tag=$(fetch "https://api.github.com/repos/${_glt_slug}/releases/latest" | \
+            grep '"tag_name"' | head -1 | \
+            sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/') || true
+    fi
+    [ -z "${_glt_tag}" ] && die "could not determine latest release tag for ${_glt_slug}"
+    printf '%s' "${_glt_tag}"
+}
+
+# ---- packages file (TSV: slug TAB name TAB path TAB version) -------------
+
+ensure_home() {
+    mkdir -p "${WOW_HOME}" "${WOW_BIN}"
+}
+
+list_packages() {
+    if [ -f "${WOW_PACKAGES}" ]; then
+        grep -v '^[[:space:]]*#' "${WOW_PACKAGES}" | grep -v '^[[:space:]]*$' || true
+    fi
+}
+
+upsert_package() {
+    _up_slug="$1" _up_name="$2" _up_path="$3" _up_version="$4"
+    ensure_home
+    _up_tmp=$(mktemp)
+    if [ -f "${WOW_PACKAGES}" ]; then
+        awk -F'\t' -v s="${_up_slug}" '$1 != s' "${WOW_PACKAGES}" > "${_up_tmp}" || true
+    fi
+    printf '%s\t%s\t%s\t%s\n' "${_up_slug}" "${_up_name}" "${_up_path}" "${_up_version}" >> "${_up_tmp}"
+    mv "${_up_tmp}" "${WOW_PACKAGES}"
+}
+
+remove_package() {
+    _rp_value="$1"
+    if [ -f "${WOW_PACKAGES}" ]; then
+        _rp_tmp=$(mktemp)
+        awk -F'\t' -v v="${_rp_value}" '($1 != v && $2 != v)' "${WOW_PACKAGES}" > "${_rp_tmp}" || true
+        mv "${_rp_tmp}" "${WOW_PACKAGES}"
+    fi
+}
+
+# Return the first matching TSV row for a slug or binary name
+find_package() {
+    _value="$1"
+    list_packages | awk -F'\t' -v v="${_value}" '($1 == v || $2 == v) { print; exit }'
+}
+
+# ---- install / download --------------------------------------------------
+
+# Construct the expected asset filename for the current platform
+asset_name() {
+    _name="$1"
+    printf '%s_%s_%s%s' "${_name}" "${WOW_OS}" "${WOW_ARCH}" "${WOW_EXT}"
+}
+
+# Download and atomically place the binary at dest
+do_install() {
+    _slug="$1" _name="$2" _dest="$3" _tag="$4"
+    _asset=$(asset_name "${_name}")
+    _url="https://github.com/${_slug}/releases/download/${_tag}/${_asset}"
+    info "Downloading ${_asset} ${_tag}..."
+    _tmp=$(mktemp)
+    download "${_url}" "${_tmp}"
+    chmod +x "${_tmp}"
+    mkdir -p "$(dirname "${_dest}")"
+    mv "${_tmp}" "${_dest}"
+    info "Installed ${_name} ${_tag} -> ${_dest}"
+}
+
+# ---- commands ------------------------------------------------------------
+
+cmd_list() {
+    _pkgs=$(list_packages)
+    if [ -z "${_pkgs}" ]; then
+        info "No packages installed."
+        return
+    fi
+    printf '%-40s %-20s %-18s %s\n' "PACKAGE" "NAME" "VERSION" "PATH"
+    printf '%-40s %-20s %-18s %s\n' "-------" "----" "-------" "----"
+    printf '%s\n' "${_pkgs}" | while IFS='	' read -r _slug _name _path _version; do
+        printf '%-40s %-20s %-18s %s\n' "${_slug}" "${_name}" "${_version}" "${_path}"
+    done
+}
+
+cmd_install() {
+    _slug="" _name="" _dest="" _version=""
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --name)    shift; _name="$1" ;;
+            --path)    shift; _dest="$1" ;;
+            --version) shift; _version="$1" ;;
+            -*)        die "unknown flag: $1" ;;
+            *)
+                if [ -z "${_slug}" ]; then
+                    _slug="$1"
+                elif [ -z "${_name}" ]; then
+                    _name="$1"
+                else
+                    die "unexpected argument: $1"
+                fi
+                ;;
+        esac
+        shift
+    done
+
+    [ -z "${_slug}" ] && die "usage: wow install <owner/repo> [--name <name>] [--path <path>] [--version <tag>]"
+
+    # Default binary name = repo portion of the slug
+    [ -z "${_name}" ] && _name="${_slug##*/}"
+
+    # Default install path
+    [ -z "${_dest}" ] && _dest="${WOW_BIN}/${_name}${WOW_EXT}"
+
+    if [ -z "${_version}" ]; then
+        info "Fetching latest release for ${_slug}..."
+        _version=$(get_latest_tag "${_slug}")
+    fi
+
+    do_install "${_slug}" "${_name}" "${_dest}" "${_version}"
+    upsert_package "${_slug}" "${_name}" "${_dest}" "${_version}"
+}
+
+cmd_update() {
+    if [ $# -eq 0 ]; then
+        _pkgs=$(list_packages)
+        if [ -z "${_pkgs}" ]; then
+            info "No packages installed."
+            return
+        fi
+        printf '%s\n' "${_pkgs}" | while IFS='	' read -r _slug _name _path _version; do
+            _do_update_one "${_slug}" "${_name}" "${_path}" "${_version}"
+        done
+    else
+        for _target; do
+            _row=$(find_package "${_target}")
+            [ -z "${_row}" ] && die "not installed: ${_target}"
+            _slug=$(printf '%s' "${_row}" | awk -F'\t' '{print $1}')
+            _name=$(printf '%s' "${_row}" | awk -F'\t' '{print $2}')
+            _path=$(printf '%s' "${_row}" | awk -F'\t' '{print $3}')
+            _version=$(printf '%s' "${_row}" | awk -F'\t' '{print $4}')
+            _do_update_one "${_slug}" "${_name}" "${_path}" "${_version}"
+        done
+    fi
+}
+
+_do_update_one() {
+    _slug="$1" _name="$2" _dest="$3" _current="$4"
+    info "Checking latest release for ${_slug}..."
+    _tag=$(get_latest_tag "${_slug}")
+    if [ "${_tag}" = "${_current}" ]; then
+        info "${_name} is already up to date (${_tag})"
+        return
+    fi
+    do_install "${_slug}" "${_name}" "${_dest}" "${_tag}"
+    upsert_package "${_slug}" "${_name}" "${_dest}" "${_tag}"
+}
+
+cmd_uninstall() {
+    [ $# -eq 0 ] && die "usage: wow uninstall <name|owner/repo>..."
+    for _target; do
+        _row=$(find_package "${_target}")
+        if [ -z "${_row}" ]; then
+            info "Not installed: ${_target}"
+            continue
+        fi
+        _name=$(printf '%s' "${_row}" | awk -F'\t' '{print $2}')
+        _path=$(printf '%s' "${_row}" | awk -F'\t' '{print $3}')
+        rm -f "${_path}"
+        remove_package "${_target}"
+        info "Uninstalled ${_name} (removed ${_path})"
+    done
+}
+
+cmd_which() {
+    [ $# -eq 0 ] && die "usage: wow which <name|owner/repo>"
+    for _target; do
+        _row=$(find_package "${_target}")
+        [ -z "${_row}" ] && die "not installed: ${_target}"
+        printf '%s' "${_row}" | awk -F'\t' '{print $3}'
+    done
+}
+
+usage() {
+    cat <<'EOF'
+wow - package manager for go-toolchain autorelease pattern programs
+
+USAGE
+  wow list                              list installed packages
+  wow install <owner/repo> [OPTIONS]    download and install a binary
+  wow update [<name|owner/repo>...]     update packages (all if no args given)
+  wow uninstall <name|owner/repo>...    remove installed packages
+  wow which <name|owner/repo>           print the install path
+
+INSTALL OPTIONS
+  --name <name>       binary name (default: repo name portion of slug)
+  --path <path>       full install path (default: ~/.local/bin/<name>)
+  --version <tag>     install a specific release tag (default: latest)
+
+ASSET NAMING CONVENTION
+  Programs must publish release assets named:
+    <binary>_linux_amd64
+    <binary>_linux_arm64
+    <binary>_darwin_amd64
+    <binary>_darwin_arm64
+    <binary>_windows_amd64.exe
+    <binary>_windows_arm64.exe
+
+  This matches the go-toolchain autorelease pattern used across the
+  wow-look-at-my org (see wow-look-at-my/go-toolchain).
+
+FILES
+  Packages:  ${XDG_DATA_HOME:-~/.local/share}/wow/packages
+  Binaries:  ~/.local/bin/
+
+EXAMPLES
+  wow install wow-look-at-my/go-toolchain
+  wow install wow-look-at-my/go-toolchain --version v0.0.1777232098
+  wow install owner/myapp --name myapp --path /usr/local/bin/myapp
+  wow update
+  wow update go-toolchain
+  wow uninstall go-toolchain
+  wow which go-toolchain
+EOF
+}
+
+# ---- main ----------------------------------------------------------------
+
+detect_platform
+
+[ $# -eq 0 ] && { usage; exit 0; }
+
+_cmd="$1"; shift
+
+case "${_cmd}" in
+    list)        cmd_list "$@" ;;
+    install)     cmd_install "$@" ;;
+    update)      cmd_update "$@" ;;
+    uninstall)   cmd_uninstall "$@" ;;
+    which)       cmd_which "$@" ;;
+    help|--help|-h) usage ;;
+    version|--version|-v) printf 'wow %s\n' "$(get_latest_tag "wow-look-at-my/wow-cli" 2>/dev/null || echo "dev")" ;;
+    *) die "unknown command: ${_cmd}. Run 'wow help' for usage." ;;
+esac
