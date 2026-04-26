@@ -5,52 +5,46 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+	"github.com/wow-look-at-my/testify/assert"
+	"github.com/wow-look-at-my/testify/require"
 )
 
 func TestStateDir_WOW_STATE_DIR(t *testing.T) {
 	t.Setenv("WOW_STATE_DIR", "/tmp/wow-test-state")
 	t.Setenv("XDG_DATA_HOME", "")
 	dir, err := StateDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if dir != "/tmp/wow-test-state" {
-		t.Errorf("got %q, want /tmp/wow-test-state", dir)
-	}
+	require.Nil(t, err)
+
+	assert.Equal(t, "/tmp/wow-test-state", dir)
+
 }
 
 func TestStateDir_XDG(t *testing.T) {
 	t.Setenv("WOW_STATE_DIR", "")
 	t.Setenv("XDG_DATA_HOME", "/tmp/xdg")
 	dir, err := StateDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if dir != filepath.Join("/tmp/xdg", "wow") {
-		t.Errorf("got %q", dir)
-	}
+	require.Nil(t, err)
+
+	assert.Equal(t, filepath.Join("/tmp/xdg", "wow"), dir)
+
 }
 
 func TestStateDir_Default(t *testing.T) {
 	t.Setenv("WOW_STATE_DIR", "")
 	t.Setenv("XDG_DATA_HOME", "")
 	dir, err := StateDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if dir == "" {
-		t.Error("StateDir returned empty string")
-	}
+	require.Nil(t, err)
+
+	assert.NotEqual(t, "", dir)
+
 }
 
 func TestDefaultBinDir(t *testing.T) {
 	dir, err := DefaultBinDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if dir == "" {
-		t.Error("DefaultBinDir returned empty string")
-	}
+	require.Nil(t, err)
+
+	assert.NotEqual(t, "", dir)
+
 }
 
 func withTempState(t *testing.T) {
@@ -61,41 +55,33 @@ func withTempState(t *testing.T) {
 func TestLoad_Empty(t *testing.T) {
 	withTempState(t)
 	s, err := Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(s.Packages) != 0 {
-		t.Errorf("expected empty packages, got %d", len(s.Packages))
-	}
+	require.Nil(t, err)
+
+	assert.Equal(t, 0, len(s.Packages))
+
 }
 
 func TestSaveLoad_Roundtrip(t *testing.T) {
 	withTempState(t)
 	s, err := Load()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
+
 	s.Add(&Package{
-		Slug:    "owner/repo",
-		Name:    "repo",
-		Path:    "/usr/local/bin/repo",
-		Version: "v1.2.3",
+		Slug:		"owner/repo",
+		Name:		"repo",
+		Path:		"/usr/local/bin/repo",
+		Version:	"v1.2.3",
 	})
-	if err := s.Save(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, s.Save())
 
 	s2, err := Load()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
+
 	pkg := s2.Find("owner/repo")
-	if pkg == nil {
-		t.Fatal("package not found after reload")
-	}
-	if pkg.Name != "repo" || pkg.Version != "v1.2.3" {
-		t.Errorf("got %+v", pkg)
-	}
+	require.NotNil(t, pkg)
+
+	assert.False(t, pkg.Name != "repo" || pkg.Version != "v1.2.3")
+
 }
 
 func TestAdd_Upserts(t *testing.T) {
@@ -103,12 +89,10 @@ func TestAdd_Upserts(t *testing.T) {
 	s, _ := Load()
 	s.Add(&Package{Slug: "a/b", Name: "b", Path: "/bin/b", Version: "v1"})
 	s.Add(&Package{Slug: "a/b", Name: "b", Path: "/bin/b", Version: "v2"})
-	if len(s.Packages) != 1 {
-		t.Errorf("expected 1 package, got %d", len(s.Packages))
-	}
-	if s.Packages["a/b"].Version != "v2" {
-		t.Errorf("expected v2, got %s", s.Packages["a/b"].Version)
-	}
+	assert.Equal(t, 1, len(s.Packages))
+
+	assert.Equal(t, "v2", s.Packages["a/b"].Version)
+
 }
 
 func TestRemove_BySlug(t *testing.T) {
@@ -116,15 +100,12 @@ func TestRemove_BySlug(t *testing.T) {
 	s, _ := Load()
 	s.Add(&Package{Slug: "a/b", Name: "b", Path: "/bin/b", Version: "v1"})
 	removed := s.Remove("a/b")
-	if removed == nil {
-		t.Fatal("Remove returned nil")
-	}
-	if removed.Slug != "a/b" {
-		t.Errorf("got slug %q", removed.Slug)
-	}
-	if len(s.Packages) != 0 {
-		t.Error("package should be gone")
-	}
+	require.NotNil(t, removed)
+
+	assert.Equal(t, "a/b", removed.Slug)
+
+	assert.Equal(t, 0, len(s.Packages))
+
 }
 
 func TestRemove_ByName(t *testing.T) {
@@ -132,21 +113,18 @@ func TestRemove_ByName(t *testing.T) {
 	s, _ := Load()
 	s.Add(&Package{Slug: "a/b", Name: "mybin", Path: "/bin/mybin", Version: "v1"})
 	removed := s.Remove("mybin")
-	if removed == nil {
-		t.Fatal("Remove returned nil")
-	}
-	if len(s.Packages) != 0 {
-		t.Error("package should be gone")
-	}
+	require.NotNil(t, removed)
+
+	assert.Equal(t, 0, len(s.Packages))
+
 }
 
 func TestRemove_NotFound(t *testing.T) {
 	withTempState(t)
 	s, _ := Load()
 	removed := s.Remove("nobody/here")
-	if removed != nil {
-		t.Error("expected nil for missing package")
-	}
+	assert.Nil(t, removed)
+
 }
 
 func TestFind_BySlug(t *testing.T) {
@@ -154,9 +132,8 @@ func TestFind_BySlug(t *testing.T) {
 	s, _ := Load()
 	s.Add(&Package{Slug: "x/y", Name: "y", Path: "/bin/y", Version: "v0"})
 	pkg := s.Find("x/y")
-	if pkg == nil || pkg.Slug != "x/y" {
-		t.Error("Find by slug failed")
-	}
+	assert.False(t, pkg == nil || pkg.Slug != "x/y")
+
 }
 
 func TestFind_ByName(t *testing.T) {
@@ -164,17 +141,15 @@ func TestFind_ByName(t *testing.T) {
 	s, _ := Load()
 	s.Add(&Package{Slug: "x/y", Name: "myname", Path: "/bin/myname", Version: "v0"})
 	pkg := s.Find("myname")
-	if pkg == nil || pkg.Name != "myname" {
-		t.Error("Find by name failed")
-	}
+	assert.False(t, pkg == nil || pkg.Name != "myname")
+
 }
 
 func TestFind_NotFound(t *testing.T) {
 	withTempState(t)
 	s, _ := Load()
-	if s.Find("ghost") != nil {
-		t.Error("expected nil for missing package")
-	}
+	assert.Nil(t, s.Find("ghost"))
+
 }
 
 func TestAll(t *testing.T) {
@@ -183,21 +158,18 @@ func TestAll(t *testing.T) {
 	s.Add(&Package{Slug: "a/a", Name: "a", Path: "/bin/a", Version: "v1"})
 	s.Add(&Package{Slug: "b/b", Name: "b", Path: "/bin/b", Version: "v2"})
 	all := s.All()
-	if len(all) != 2 {
-		t.Errorf("expected 2 packages, got %d", len(all))
-	}
+	assert.Equal(t, 2, len(all))
+
 	sort.Slice(all, func(i, j int) bool { return all[i].Slug < all[j].Slug })
-	if all[0].Slug != "a/a" || all[1].Slug != "b/b" {
-		t.Errorf("unexpected order: %v", all)
-	}
+	assert.False(t, all[0].Slug != "a/a" || all[1].Slug != "b/b")
+
 }
 
 func TestAll_Empty(t *testing.T) {
 	withTempState(t)
 	s, _ := Load()
-	if len(s.All()) != 0 {
-		t.Error("expected empty All()")
-	}
+	assert.Equal(t, 0, len(s.All()))
+
 }
 
 func TestSave_CreatesDirectory(t *testing.T) {
@@ -206,10 +178,9 @@ func TestSave_CreatesDirectory(t *testing.T) {
 	t.Setenv("WOW_STATE_DIR", nested)
 	s, _ := Load()
 	s.Add(&Package{Slug: "a/b", Name: "b", Path: "/bin/b", Version: "v1"})
-	if err := s.Save(); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(filepath.Join(nested, "packages.json")); err != nil {
-		t.Error("packages.json not created")
-	}
+	require.NoError(t, s.Save())
+
+	_, err := os.Stat(filepath.Join(nested, "packages.json"))
+	assert.Nil(t, err)
+
 }

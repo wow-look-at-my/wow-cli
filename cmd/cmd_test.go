@@ -12,6 +12,8 @@ import (
 	"time"
 
 	selfupdate "github.com/wow-look-at-my/go-selfupdate-mini"
+	"github.com/wow-look-at-my/testify/assert"
+	"github.com/wow-look-at-my/testify/require"
 	"github.com/wow-look-at-my/wow-cli/store"
 )
 
@@ -40,25 +42,25 @@ type mockAsset struct {
 	name string
 }
 
-func (a *mockAsset) GetID() int64                 { return 1 }
-func (a *mockAsset) GetName() string               { return a.name }
-func (a *mockAsset) GetSize() int                  { return 100 }
-func (a *mockAsset) GetBrowserDownloadURL() string { return "http://fake/" + a.name }
+func (a *mockAsset) GetID() int64			{ return 1 }
+func (a *mockAsset) GetName() string			{ return a.name }
+func (a *mockAsset) GetSize() int			{ return 100 }
+func (a *mockAsset) GetBrowserDownloadURL() string	{ return "http://fake/" + a.name }
 
 type mockRelease struct {
-	tag    string
-	assets []selfupdate.SourceAsset
+	tag	string
+	assets	[]selfupdate.SourceAsset
 }
 
-func (r *mockRelease) GetID() int64                      { return 1 }
-func (r *mockRelease) GetTagName() string                 { return r.tag }
-func (r *mockRelease) GetDraft() bool                     { return false }
-func (r *mockRelease) GetPrerelease() bool                { return false }
-func (r *mockRelease) GetPublishedAt() time.Time          { return time.Time{} }
-func (r *mockRelease) GetReleaseNotes() string            { return "" }
-func (r *mockRelease) GetName() string                    { return r.tag }
-func (r *mockRelease) GetURL() string                     { return "http://fake/releases/" + r.tag }
-func (r *mockRelease) GetAssets() []selfupdate.SourceAsset { return r.assets }
+func (r *mockRelease) GetID() int64				{ return 1 }
+func (r *mockRelease) GetTagName() string			{ return r.tag }
+func (r *mockRelease) GetDraft() bool				{ return false }
+func (r *mockRelease) GetPrerelease() bool			{ return false }
+func (r *mockRelease) GetPublishedAt() time.Time		{ return time.Time{} }
+func (r *mockRelease) GetReleaseNotes() string			{ return "" }
+func (r *mockRelease) GetName() string				{ return r.tag }
+func (r *mockRelease) GetURL() string				{ return "http://fake/releases/" + r.tag }
+func (r *mockRelease) GetAssets() []selfupdate.SourceAsset	{ return r.assets }
 
 type mockSource struct {
 	releases []selfupdate.SourceRelease
@@ -90,8 +92,8 @@ func withMockUpdater(t *testing.T, binary, tag string) {
 		Source: &mockSource{
 			releases: []selfupdate.SourceRelease{
 				&mockRelease{
-					tag:    tag,
-					assets: []selfupdate.SourceAsset{&mockAsset{name: asset}},
+					tag:	tag,
+					assets:	[]selfupdate.SourceAsset{&mockAsset{name: asset}},
 				},
 			},
 		},
@@ -108,37 +110,30 @@ func withMockUpdater(t *testing.T, binary, tag string) {
 func TestBinaryExt(t *testing.T) {
 	ext := binaryExt()
 	if runtime.GOOS == "windows" {
-		if ext != ".exe" {
-			t.Errorf("expected .exe on windows, got %q", ext)
-		}
+		assert.Equal(t, ".exe", ext)
+
 	} else {
-		if ext != "" {
-			t.Errorf("expected empty on non-windows, got %q", ext)
-		}
+		assert.Equal(t, "", ext)
+
 	}
 }
 
 func TestDefaultInstallPath(t *testing.T) {
 	path, err := defaultInstallPath("mytool")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(path, "mytool") {
-		t.Errorf("expected path to contain 'mytool', got %q", path)
-	}
-	if !strings.Contains(path, ".local") || !strings.Contains(path, "bin") {
-		t.Errorf("expected default install path under ~/.local/bin, got %q", path)
-	}
+	require.Nil(t, err)
+
+	assert.Contains(t, path, "mytool")
+
+	assert.False(t, !strings.Contains(path, ".local") || !strings.Contains(path, "bin"))
+
 }
 
 func TestNewUpdater(t *testing.T) {
 	up, err := newUpdater()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if up == nil {
-		t.Error("newUpdater returned nil")
-	}
+	require.Nil(t, err)
+
+	assert.NotNil(t, up)
+
 }
 
 // ---- list command --------------------------------------------------------
@@ -146,12 +141,10 @@ func TestNewUpdater(t *testing.T) {
 func TestList_Empty(t *testing.T) {
 	withTempState(t)
 	out, err := execute(t, "list")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out, "No packages installed") {
-		t.Errorf("expected 'No packages installed', got %q", out)
-	}
+	require.Nil(t, err)
+
+	assert.Contains(t, out, "No packages installed")
+
 }
 
 func TestList_WithPackages(t *testing.T) {
@@ -161,12 +154,10 @@ func TestList_WithPackages(t *testing.T) {
 	s.Save()
 
 	out, err := execute(t, "list")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out, "owner/tool") || !strings.Contains(out, "v1.0.0") {
-		t.Errorf("expected package info in output, got %q", out)
-	}
+	require.Nil(t, err)
+
+	assert.False(t, !strings.Contains(out, "owner/tool") || !strings.Contains(out, "v1.0.0"))
+
 }
 
 // ---- which command -------------------------------------------------------
@@ -178,12 +169,10 @@ func TestWhich_Found(t *testing.T) {
 	s.Save()
 
 	out, err := execute(t, "which", "tool")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out, "/bin/tool") {
-		t.Errorf("expected /bin/tool in output, got %q", out)
-	}
+	require.Nil(t, err)
+
+	assert.Contains(t, out, "/bin/tool")
+
 }
 
 func TestWhich_BySlug(t *testing.T) {
@@ -193,20 +182,17 @@ func TestWhich_BySlug(t *testing.T) {
 	s.Save()
 
 	out, err := execute(t, "which", "owner/tool")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out, "/bin/tool") {
-		t.Errorf("expected /bin/tool, got %q", out)
-	}
+	require.Nil(t, err)
+
+	assert.Contains(t, out, "/bin/tool")
+
 }
 
 func TestWhich_NotFound(t *testing.T) {
 	withTempState(t)
 	_, err := execute(t, "which", "nobody")
-	if err == nil {
-		t.Error("expected error for missing package")
-	}
+	assert.NotNil(t, err)
+
 }
 
 // ---- uninstall command ---------------------------------------------------
@@ -215,9 +201,8 @@ func TestUninstall_NotFound(t *testing.T) {
 	withTempState(t)
 	// non-existent package: prints to stderr but doesn't return error
 	out, _ := execute(t, "uninstall", "nobody")
-	if !strings.Contains(out, "not installed") {
-		t.Errorf("expected 'not installed' message, got %q", out)
-	}
+	assert.Contains(t, out, "not installed")
+
 }
 
 func TestUninstall_Found(t *testing.T) {
@@ -232,15 +217,13 @@ func TestUninstall_Found(t *testing.T) {
 	s.Save()
 
 	out, err := execute(t, "uninstall", "mytool")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out, "Uninstalled") {
-		t.Errorf("expected 'Uninstalled' in output, got %q", out)
-	}
-	if _, err := os.Stat(binPath); !os.IsNotExist(err) {
-		t.Error("binary file should have been deleted")
-	}
+	require.Nil(t, err)
+
+	assert.Contains(t, out, "Uninstalled")
+
+	_, statErr := os.Stat(binPath)
+	assert.True(t, os.IsNotExist(statErr))
+
 }
 
 // ---- install command -----------------------------------------------------
@@ -253,22 +236,17 @@ func TestInstall(t *testing.T) {
 	destPath := filepath.Join(tmp, "mytool")
 
 	out, err := execute(t, "install", "owner/mytool", "--path", destPath)
-	if err != nil {
-		t.Fatalf("install failed: %v\noutput: %s", err, out)
-	}
-	if !strings.Contains(out, "Installed") {
-		t.Errorf("expected 'Installed' in output, got %q", out)
-	}
+	require.Nil(t, err)
+
+	assert.Contains(t, out, "Installed")
 
 	// verify store entry
 	s, _ := store.Load()
 	pkg := s.Find("mytool")
-	if pkg == nil {
-		t.Fatal("package not found in store")
-	}
-	if pkg.Version != "v0.0.1" {
-		t.Errorf("expected version v0.0.1, got %q", pkg.Version)
-	}
+	require.NotNil(t, pkg)
+
+	assert.Equal(t, "v0.0.1", pkg.Version)
+
 }
 
 func TestInstall_DefaultName(t *testing.T) {
@@ -279,18 +257,14 @@ func TestInstall_DefaultName(t *testing.T) {
 	destPath := filepath.Join(tmp, "mything")
 
 	_, err := execute(t, "install", "org/mything", "--path", destPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	s, _ := store.Load()
 	pkg := s.Find("org/mything")
-	if pkg == nil {
-		t.Fatal("package not found")
-	}
-	if pkg.Name != "mything" {
-		t.Errorf("expected name 'mything', got %q", pkg.Name)
-	}
+	require.NotNil(t, pkg)
+
+	assert.Equal(t, "mything", pkg.Name)
+
 }
 
 // ---- update command ------------------------------------------------------
@@ -298,12 +272,10 @@ func TestInstall_DefaultName(t *testing.T) {
 func TestUpdate_NoPackages(t *testing.T) {
 	withTempState(t)
 	out, err := execute(t, "update")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out, "No packages installed") {
-		t.Errorf("expected 'No packages installed', got %q", out)
-	}
+	require.Nil(t, err)
+
+	assert.Contains(t, out, "No packages installed")
+
 }
 
 func TestUpdate_AlreadyLatest(t *testing.T) {
@@ -315,12 +287,10 @@ func TestUpdate_AlreadyLatest(t *testing.T) {
 	s.Save()
 
 	out, err := execute(t, "update", "mytool")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out, "already up to date") {
-		t.Errorf("expected 'already up to date', got %q", out)
-	}
+	require.Nil(t, err)
+
+	assert.Contains(t, out, "already up to date")
+
 }
 
 func TestUpdate_NewVersion(t *testing.T) {
@@ -335,24 +305,19 @@ func TestUpdate_NewVersion(t *testing.T) {
 	s.Save()
 
 	out, err := execute(t, "update")
-	if err != nil {
-		t.Fatalf("update failed: %v\noutput: %s", err, out)
-	}
-	if !strings.Contains(out, "Updated") || !strings.Contains(out, "v2.0.0") {
-		t.Errorf("expected 'Updated' to v2.0.0 in output, got %q", out)
-	}
+	require.Nil(t, err)
+
+	assert.False(t, !strings.Contains(out, "Updated") || !strings.Contains(out, "v2.0.0"))
 
 	s2, _ := store.Load()
 	pkg := s2.Find("mytool")
-	if pkg == nil || pkg.Version != "v2.0.0" {
-		t.Errorf("expected store updated to v2.0.0, got %+v", pkg)
-	}
+	assert.False(t, pkg == nil || pkg.Version != "v2.0.0")
+
 }
 
 func TestUpdate_NotInstalled(t *testing.T) {
 	withTempState(t)
 	_, err := execute(t, "update", "nonexistent")
-	if err == nil {
-		t.Error("expected error for non-installed package")
-	}
+	assert.NotNil(t, err)
+
 }
