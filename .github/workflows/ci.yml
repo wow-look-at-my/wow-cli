@@ -3,10 +3,13 @@ name: CI
 on:
   push:
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
-  shellcheck:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Run shellcheck
-        run: shellcheck wow
+      - uses: wow-look-at-my/go-toolchain@v1
