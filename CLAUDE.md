@@ -27,6 +27,8 @@ cmd/
 store/
   store.go       # JSON state at ~/.local/share/wow/packages.json
   store_test.go  # store CRUD and persistence tests
+pages/
+  install.sh     # curl-pipe installer, served via GitHub Pages
 ```
 
 Each command file registers itself via `init()` — do not add registration calls to `root.go` or `main.go`.
@@ -56,3 +58,5 @@ Always use `withTempState` in command tests to avoid touching real state.
 ## CI
 
 Uses `wow-look-at-my/go-toolchain@v1` with `autorelease: true`. On every push, CI builds cross-platform binaries and publishes a tagged release (`v0.0.<timestamp>`). The workflow requires `id-token: write` and `contents: write` permissions.
+
+`pages.yml` deploys `pages/` to GitHub Pages on every push to `master`, serving the installer script at `https://wow-look-at-my.github.io/wow-cli/install.sh`.
