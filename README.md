@@ -4,7 +4,13 @@ A package manager for programs that follow the [go-toolchain autorelease](https:
 
 ## Installation
 
-Download the latest binary for your platform from the [releases page](https://github.com/wow-look-at-my/wow-cli/releases/latest):
+```sh
+curl -fsSL https://wow-look-at-my.github.io/wow-cli/install.sh | sh
+```
+
+This installs `wow` to `~/.local/bin/wow`. No PATH or shell config is modified.
+
+Or download the latest binary manually from the [releases page](https://github.com/wow-look-at-my/wow-cli/releases/latest):
 
 | Platform      | Binary |
 |---------------|--------|
