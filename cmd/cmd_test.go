@@ -77,6 +77,34 @@ func (s *mockSource) DownloadReleaseAsset(_ context.Context, _ *selfupdate.Relea
 	return io.NopCloser(strings.NewReader("#!/bin/sh\necho mock\n")), nil
 }
 
+// mockSourcePerSlug returns different releases depending on which repo is queried.
+type mockSourcePerSlug struct {
+	// keyed by "owner/repo"
+	perSlug map[string][]selfupdate.SourceRelease
+}
+
+func (s *mockSourcePerSlug) ListReleases(_ context.Context, repo selfupdate.Repository) ([]selfupdate.SourceRelease, error) {
+	owner, name, _ := repo.GetSlug()
+	return s.perSlug[owner+"/"+name], nil
+}
+
+func (s *mockSourcePerSlug) DownloadReleaseAsset(_ context.Context, _ *selfupdate.Release, _ int64) (io.ReadCloser, error) {
+	return io.NopCloser(strings.NewReader("#!/bin/sh\necho mock\n")), nil
+}
+
+// withMockUpdaterPerSlug sets up a slug-aware mock updater for the test duration.
+func withMockUpdaterPerSlug(t *testing.T, perSlug map[string][]selfupdate.SourceRelease) {
+	t.Helper()
+	cfg := selfupdate.Config{
+		Source: &mockSourcePerSlug{perSlug: perSlug},
+		Install: func(r io.Reader, dest string) error {
+			return os.WriteFile(dest, []byte("#!/bin/sh\necho mock\n"), 0o755)
+		},
+	}
+	testUpdaterConfig = &cfg
+	t.Cleanup(func() { testUpdaterConfig = nil })
+}
+
 // assetForPlatform returns an asset name matching the current platform.
 func assetForPlatform(binary string) string {
 	goos := runtime.GOOS
@@ -285,6 +313,70 @@ func TestInstall_BareNameDefaultsOrg(t *testing.T) {
 	require.NotNil(t, pkg)
 
 	assert.Equal(t, "wow-look-at-my/mytool", pkg.Slug)
+}
+
+func TestInstall_DidYouMean_UserConfirms(t *testing.T) {
+	withTempState(t)
+
+	goAsset := assetForPlatform("ccze-go")
+	withMockUpdaterPerSlug(t, map[string][]selfupdate.SourceRelease{
+		// wow-look-at-my/ccze has no releases; ccze-go has one
+		"wow-look-at-my/ccze-go": {
+			&mockRelease{tag: "v0.0.1", assets: []selfupdate.SourceAsset{&mockAsset{name: goAsset}}},
+		},
+	})
+	withMockSearchServer(t, `{"items":[{"full_name":"wow-look-at-my/ccze-go","description":"ccze colorizer"}]}`)
+
+	tmp := t.TempDir()
+	destPath := filepath.Join(tmp, "ccze")
+
+	rootCmd.SetIn(strings.NewReader("y\n"))
+	out, err := execute(t, "install", "ccze", "--path", destPath)
+	require.Nil(t, err)
+	assert.Contains(t, out, "Installed")
+
+	s, _ := store.Load()
+	pkg := s.Find("ccze")
+	require.NotNil(t, pkg)
+	assert.Equal(t, "ccze", pkg.Name)
+	assert.Equal(t, "wow-look-at-my/ccze-go", pkg.Slug)
+}
+
+func TestInstall_DidYouMean_UserDeclines(t *testing.T) {
+	withTempState(t)
+
+	goAsset := assetForPlatform("ccze-go")
+	withMockUpdaterPerSlug(t, map[string][]selfupdate.SourceRelease{
+		"wow-look-at-my/ccze-go": {
+			&mockRelease{tag: "v0.0.1", assets: []selfupdate.SourceAsset{&mockAsset{name: goAsset}}},
+		},
+	})
+	withMockSearchServer(t, `{"items":[{"full_name":"wow-look-at-my/ccze-go","description":"ccze colorizer"}]}`)
+
+	rootCmd.SetIn(strings.NewReader("n\n"))
+	_, err := execute(t, "install", "ccze")
+	assert.NotNil(t, err)
+}
+
+func TestInstall_DidYouMean_NoMatch(t *testing.T) {
+	withTempState(t)
+
+	withMockUpdaterPerSlug(t, map[string][]selfupdate.SourceRelease{})
+	withMockSearchServer(t, `{"items":[]}`)
+
+	_, err := execute(t, "install", "nonexistent")
+	assert.NotNil(t, err)
+}
+
+func TestInstall_DidYouMean_ExplicitSlugNoSearch(t *testing.T) {
+	withTempState(t)
+
+	withMockUpdaterPerSlug(t, map[string][]selfupdate.SourceRelease{})
+	// Search server never called for explicit slugs; any accidental call returns nothing.
+	withMockSearchServer(t, `{"items":[]}`)
+
+	_, err := execute(t, "install", "owner/ccze")
+	assert.NotNil(t, err)
 }
 
 // ---- update command ------------------------------------------------------

@@ -33,30 +33,8 @@ type ghSearchResponse struct {
 var ghSearchBaseURL = "https://api.github.com"
 
 func runSearch(cmd *cobra.Command, args []string) error {
-	q := url.QueryEscape(args[0] + " org:wow-look-at-my")
-	apiURL := ghSearchBaseURL + "/search/repositories?q=" + q
-
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, apiURL, nil)
+	result, err := ghSearch(context.Background(), args[0])
 	if err != nil {
-		return err
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	if token := os.Getenv("GITHUB_TOKEN"); token != "" && os.Getenv("GH_HOST") == "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("GitHub API error: %s", resp.Status)
-	}
-
-	var result ghSearchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return err
 	}
 
@@ -73,4 +51,45 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		}
 	}
 	return nil
+}
+
+// ghSearch queries the GitHub repository search API for the given query in the wow-look-at-my org.
+func ghSearch(ctx context.Context, query string) (*ghSearchResponse, error) {
+	q := url.QueryEscape(query + " org:wow-look-at-my")
+	apiURL := ghSearchBaseURL + "/search/repositories?q=" + q
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	if token := os.Getenv("GITHUB_TOKEN"); token != "" && os.Getenv("GH_HOST") == "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API error: %s", resp.Status)
+	}
+
+	var result ghSearchResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode search response: %w", err)
+	}
+	return &result, nil
+}
+
+// findBestOrgMatch searches the org for the closest repo matching name and returns
+// its full slug (e.g. "wow-look-at-my/ccze-go"), or "" if nothing useful is found.
+func findBestOrgMatch(ctx context.Context, name string) (string, error) {
+	result, err := ghSearch(ctx, name)
+	if err != nil || len(result.Items) == 0 {
+		return "", err
+	}
+	return result.Items[0].FullName, nil
 }
