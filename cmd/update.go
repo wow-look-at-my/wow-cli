@@ -2,10 +2,16 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/wow-look-at-my/wow-cli/store"
 )
+
+// wowExePathOverride overrides the executable path for wow self-update.
+// Set only from tests.
+var wowExePathOverride string
 
 var updateCmd = &cobra.Command{
 	Use:   "update",
@@ -27,11 +33,16 @@ func runUpdate(cmd *cobra.Command, _ []string) error {
 	targets := s.All()
 	if len(targets) == 0 {
 		fmt.Fprintln(cmd.OutOrStdout(), "No packages installed.")
-		return nil
+	} else {
+		for _, pkg := range targets {
+			if err := updateOne(cmd, s, pkg); err != nil {
+				return err
+			}
+		}
 	}
 
-	for _, pkg := range targets {
-		if err := updateOne(cmd, s, pkg); err != nil {
+	if buildVersion != "" {
+		if err := selfUpdateWow(cmd); err != nil {
 			return err
 		}
 	}
@@ -62,5 +73,41 @@ func updateOne(cmd *cobra.Command, s *store.Store, pkg *store.Package) error {
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Updated %s -> %s\n", pkg.Name, pkg.Version)
+	return nil
+}
+
+func selfUpdateWow(cmd *cobra.Command) error {
+	const slug = "wow-look-at-my/wow-cli"
+	fmt.Fprintf(cmd.OutOrStdout(), "Checking latest release for %s...\n", slug)
+
+	rel, err := detectLatest(slug)
+	if err != nil {
+		return err
+	}
+
+	if rel.Version.Original == buildVersion {
+		fmt.Fprintf(cmd.OutOrStdout(), "wow is already up to date (%s)\n", buildVersion)
+		return nil
+	}
+
+	exePath := wowExePathOverride
+	if exePath == "" {
+		var err error
+		exePath, err = os.Executable()
+		if err != nil {
+			return fmt.Errorf("resolve executable: %w", err)
+		}
+		exePath, err = filepath.EvalSymlinks(exePath)
+		if err != nil {
+			return fmt.Errorf("resolve executable symlinks: %w", err)
+		}
+	}
+
+	fmt.Fprintf(cmd.OutOrStdout(), "Updating wow %s -> %s...\n", buildVersion, rel.Version.Original)
+	if err := installRelease(rel, exePath); err != nil {
+		return err
+	}
+
+	fmt.Fprintf(cmd.OutOrStdout(), "Updated wow -> %s\n", rel.Version.Original)
 	return nil
 }
