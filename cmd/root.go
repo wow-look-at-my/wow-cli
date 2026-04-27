@@ -30,7 +30,6 @@ go-toolchain autorelease convention.`,
 
 // Execute runs the root command.
 func Execute() {
-	populateBuildVersion()
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}

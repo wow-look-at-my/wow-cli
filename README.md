@@ -80,10 +80,12 @@ wow which go-toolchain
 
 #### `version`
 
-Print the build version of the running `wow` binary. Prints `(dev)` for builds from a dirty working tree or without VCS info.
+Print the build version of the running `wow` binary along with the latest available release. Use `--bare` to print only the current version string. Dev builds (dirty working tree or no VCS info) print an empty version.
 
 ```sh
 wow version
+wow version --bare
+wow --version
 ```
 
 ## State

@@ -1,35 +1,23 @@
 package cmd
 
 import (
-	"fmt"
 	"runtime/debug"
 	"strconv"
 	"time"
 
-	"github.com/spf13/cobra"
+	selfupdate "github.com/wow-look-at-my/go-selfupdate-mini"
 )
 
-var versionCmd = &cobra.Command{
-	Use:   "version",
-	Short: "Print the wow build version",
-	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, _ []string) {
-		v := buildVersion
-		if v == "" {
-			v = "(dev)"
-		}
-		fmt.Fprintln(cmd.OutOrStdout(), v)
-	},
-}
-
 func init() {
-	rootCmd.AddCommand(versionCmd)
+	populateBuildVersion()
+	rootCmd.Version = buildVersion
+	rootCmd.AddCommand(selfupdate.NewVersionCommand(buildVersion, selfupdate.ParseSlug("wow-look-at-my/wow-cli")))
 }
 
 // populateBuildVersion sets buildVersion from the binary's embedded VCS
 // info if it isn't already set. The autorelease tag format is
-// "v0.0.<unix-seconds>" derived from the commit timestamp, which matches
-// vcs.time. Dirty or non-VCS builds leave buildVersion empty.
+// "v0.0.<unix-seconds>" derived from vcs.time. Dirty or non-VCS builds
+// leave buildVersion empty.
 func populateBuildVersion() {
 	if buildVersion != "" {
 		return

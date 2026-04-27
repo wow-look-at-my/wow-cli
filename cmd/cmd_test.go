@@ -548,26 +548,6 @@ func TestExecute_Succeeds(t *testing.T) {
 
 // ---- version command ------------------------------------------------------
 
-func TestVersion_WithBuildVersion(t *testing.T) {
-	old := buildVersion
-	buildVersion = "v0.0.1234567890"
-	t.Cleanup(func() { buildVersion = old })
-
-	out, err := execute(t, "version")
-	require.Nil(t, err)
-	assert.Contains(t, out, "v0.0.1234567890")
-}
-
-func TestVersion_Dev(t *testing.T) {
-	old := buildVersion
-	buildVersion = ""
-	t.Cleanup(func() { buildVersion = old })
-
-	out, err := execute(t, "version")
-	require.Nil(t, err)
-	assert.Contains(t, out, "(dev)")
-}
-
 func TestVersionFromBuildInfo_Tagged(t *testing.T) {
 	info := &debug.BuildInfo{
 		Settings: []debug.BuildSetting{
