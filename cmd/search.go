@@ -41,7 +41,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
+	if token := os.Getenv("GITHUB_TOKEN"); token != "" && os.Getenv("GH_HOST") == "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 

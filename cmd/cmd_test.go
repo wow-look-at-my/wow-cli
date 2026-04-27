@@ -407,3 +407,25 @@ func TestSearch_NoDescription(t *testing.T) {
 	assert.Contains(t, out, "wow-look-at-my/bare")
 	assert.NotContains(t, out, "—")
 }
+
+func TestSearch_IgnoresGHHost(t *testing.T) {
+	t.Setenv("GH_HOST", "github.mycompany.com")
+	t.Setenv("GITHUB_TOKEN", "enterprise-token")
+
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"items":[]}`)
+	}))
+	t.Cleanup(func() {
+		srv.Close()
+		ghSearchBaseURL = "https://api.github.com"
+	})
+	ghSearchBaseURL = srv.URL
+
+	_, err := execute(t, "search", "anything")
+	require.Nil(t, err)
+
+	assert.Empty(t, gotAuth, "should not send token when GH_HOST is set")
+}
