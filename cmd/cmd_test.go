@@ -589,6 +589,48 @@ func TestSearch_NoDescription(t *testing.T) {
 	assert.NotContains(t, out, "—")
 }
 
+func TestSearch_NoArgs_ListsAll(t *testing.T) {
+	var gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"items":[{"full_name":"wow-look-at-my/wow-cli","description":"package manager"}]}`)
+	}))
+	t.Cleanup(func() {
+		srv.Close()
+		ghSearchBaseURL = "https://api.github.com"
+	})
+	ghSearchBaseURL = srv.URL
+
+	out, err := execute(t, "search")
+	require.Nil(t, err)
+
+	assert.Contains(t, gotQuery, "org%3Awow-look-at-my")
+	assert.NotContains(t, gotQuery, "%2A") // no wildcard character
+	assert.Contains(t, out, "wow-look-at-my/wow-cli")
+}
+
+func TestSearch_Wildcard_ListsAll(t *testing.T) {
+	var gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"items":[{"full_name":"wow-look-at-my/wow-cli","description":"package manager"}]}`)
+	}))
+	t.Cleanup(func() {
+		srv.Close()
+		ghSearchBaseURL = "https://api.github.com"
+	})
+	ghSearchBaseURL = srv.URL
+
+	out, err := execute(t, "search", "*")
+	require.Nil(t, err)
+
+	assert.Contains(t, gotQuery, "org%3Awow-look-at-my")
+	assert.NotContains(t, gotQuery, "%2A") // * is treated as list-all, not passed through
+	assert.Contains(t, out, "wow-look-at-my/wow-cli")
+}
+
 func TestSearch_IgnoresGHHost(t *testing.T) {
 	t.Setenv("GH_HOST", "github.mycompany.com")
 	t.Setenv("GITHUB_TOKEN", "enterprise-token")

@@ -12,9 +12,9 @@ import (
 )
 
 var searchCmd = &cobra.Command{
-	Use:   "search <query>",
+	Use:   "search [query]",
 	Short: "Search wow-look-at-my org for installable packages",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MaximumNArgs(1),
 	RunE:  runSearch,
 }
 
@@ -33,7 +33,11 @@ type ghSearchResponse struct {
 var ghSearchBaseURL = "https://api.github.com"
 
 func runSearch(cmd *cobra.Command, args []string) error {
-	result, err := ghSearch(context.Background(), args[0])
+	query := ""
+	if len(args) > 0 && args[0] != "*" {
+		query = args[0]
+	}
+	result, err := ghSearch(context.Background(), query)
 	if err != nil {
 		return err
 	}
@@ -54,8 +58,13 @@ func runSearch(cmd *cobra.Command, args []string) error {
 }
 
 // ghSearch queries the GitHub repository search API for the given query in the wow-look-at-my org.
+// An empty query lists all repos in the org.
 func ghSearch(ctx context.Context, query string) (*ghSearchResponse, error) {
-	q := url.QueryEscape(query + " org:wow-look-at-my")
+	combined := "org:wow-look-at-my"
+	if query != "" {
+		combined = query + " " + combined
+	}
+	q := url.QueryEscape(combined)
 	apiURL := ghSearchBaseURL + "/search/repositories?q=" + q
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
