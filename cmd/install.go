@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 	selfupdate "github.com/wow-look-at-my/go-selfupdate-mini"
@@ -64,13 +65,33 @@ func runInstall(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		if rel == nil {
-			return fmt.Errorf("version %s not found for %s", installVersion, slug)
+			if goSlug := goFallbackSlug(args[0], slug); goSlug != "" {
+				rel, _, err = up.DetectVersion(context.Background(), selfupdate.ParseSlug(goSlug), installVersion)
+				if err != nil {
+					return err
+				}
+				if rel != nil {
+					slug = goSlug
+				}
+			}
+			if rel == nil {
+				return fmt.Errorf("version %s not found for %s", installVersion, slug)
+			}
 		}
 	} else {
 		fmt.Fprintf(cmd.OutOrStdout(), "Fetching latest release for %s...\n", slug)
 		rel, err = detectLatest(slug)
 		if err != nil {
-			return err
+			if goSlug := goFallbackSlug(args[0], slug); goSlug != "" {
+				if goRel, goErr := detectLatest(goSlug); goErr == nil {
+					rel = goRel
+					slug = goSlug
+					err = nil
+				}
+			}
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -95,4 +116,13 @@ func runInstall(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Installed %s %s -> %s\n", name, rel.Version.Original, dest)
 	return nil
+}
+
+// goFallbackSlug returns a fallback slug with "-go" appended to the repo name,
+// but only when the user gave a bare name (no "/"). Returns "" if not applicable.
+func goFallbackSlug(input, currentSlug string) string {
+	if strings.Contains(input, "/") {
+		return ""
+	}
+	return currentSlug + "-go"
 }
