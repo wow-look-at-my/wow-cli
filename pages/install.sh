@@ -4,6 +4,7 @@ set -e
 REPO="wow-look-at-my/wow-cli"
 INSTALL_DIR="${HOME}/.local/bin"
 BINARY="wow"
+ASSET_PREFIX="wow-cli"
 
 OS="$(uname -s)"
 case "${OS}" in
@@ -25,7 +26,7 @@ case "${ARCH}" in
     ;;
 esac
 
-ASSET="${BINARY}_${OS}_${ARCH}"
+ASSET="${ASSET_PREFIX}_${OS}_${ARCH}"
 URL="https://github.com/${REPO}/releases/latest/download/${ASSET}"
 
 mkdir -p "${INSTALL_DIR}"
