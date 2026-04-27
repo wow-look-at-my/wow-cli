@@ -342,6 +342,95 @@ func TestUpdate_RejectsArgs(t *testing.T) {
 
 }
 
+func TestUpdate_SelfUpdateAlreadyLatest(t *testing.T) {
+	withTempState(t)
+	withMockUpdater(t, "wow-cli", "v2.0.0")
+
+	old := buildVersion
+	buildVersion = "v2.0.0"
+	t.Cleanup(func() { buildVersion = old })
+
+	out, err := execute(t, "update")
+	require.Nil(t, err)
+
+	assert.Contains(t, out, "wow is already up to date")
+	assert.Contains(t, out, "v2.0.0")
+}
+
+func TestUpdate_SelfUpdateNewVersion(t *testing.T) {
+	withTempState(t)
+	withMockUpdater(t, "wow-cli", "v2.0.0")
+
+	// Write a temp file to stand in for the wow executable.
+	tmp := t.TempDir()
+	exePath := filepath.Join(tmp, "wow")
+	os.WriteFile(exePath, []byte("#!/bin/sh\necho old\n"), 0o755)
+
+	// Point selfUpdateWow at the temp file instead of the real binary.
+	oldExe := wowExePathOverride
+	wowExePathOverride = exePath
+	t.Cleanup(func() { wowExePathOverride = oldExe })
+
+	old := buildVersion
+	buildVersion = "v1.0.0"
+	t.Cleanup(func() { buildVersion = old })
+
+	out, err := execute(t, "update")
+	require.Nil(t, err)
+
+	assert.Contains(t, out, "Updating wow")
+	assert.Contains(t, out, "v1.0.0")
+	assert.Contains(t, out, "v2.0.0")
+	assert.Contains(t, out, "Updated wow")
+}
+
+func TestUpdate_SelfUpdateUsesRealExePath(t *testing.T) {
+	withTempState(t)
+
+	// Mock that detects a newer version but errors on install (safe: no file write).
+	asset := assetForPlatform("wow-cli")
+	cfg := selfupdate.Config{
+		Source: &mockSource{
+			releases: []selfupdate.SourceRelease{
+				&mockRelease{tag: "v2.0.0", assets: []selfupdate.SourceAsset{&mockAsset{name: asset}}},
+			},
+		},
+		Install: func(_ io.Reader, _ string) error {
+			return fmt.Errorf("install aborted")
+		},
+	}
+	testUpdaterConfig = &cfg
+	t.Cleanup(func() { testUpdaterConfig = nil })
+
+	old := buildVersion
+	buildVersion = "v1.0.0"
+	t.Cleanup(func() { buildVersion = old })
+	// wowExePathOverride intentionally not set — exercises os.Executable() path.
+
+	out, err := execute(t, "update")
+	require.NotNil(t, err)
+	assert.Contains(t, out, "Updating wow")
+}
+
+func TestUpdate_SelfUpdateDetectError(t *testing.T) {
+	withTempState(t)
+
+	// Source with no releases produces a "no release found" error from detectLatest.
+	cfg := selfupdate.Config{
+		Source: &mockSource{releases: nil},
+	}
+	testUpdaterConfig = &cfg
+	t.Cleanup(func() { testUpdaterConfig = nil })
+
+	old := buildVersion
+	buildVersion = "v1.0.0"
+	t.Cleanup(func() { buildVersion = old })
+
+	_, err := execute(t, "update")
+	require.NotNil(t, err)
+	assert.Contains(t, err.Error(), "no release found")
+}
+
 func TestInstall_WithVersion(t *testing.T) {
 	withTempState(t)
 	withMockUpdater(t, "mytool", "v0.0.1")

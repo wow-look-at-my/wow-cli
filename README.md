@@ -23,11 +23,7 @@ Or download the latest binary manually from the [releases page](https://github.c
 
 Place it somewhere on your `PATH` (e.g. `~/.local/bin/wow`).
 
-Once installed, wow can manage itself:
-
-```sh
-wow install wow-look-at-my/wow-cli --name wow
-```
+Once installed, `wow update` keeps itself up to date automatically alongside your other packages.
 
 ## Usage
 
@@ -50,14 +46,12 @@ Flags:
 - `--path <path>` — override the install path (default: `~/.local/bin/<name>`)
 - `--version <tag>` — install a specific release tag (default: latest)
 
-#### `update [<name|owner/repo>...]`
+#### `update`
 
-Update installed packages to their latest releases. With no arguments, updates all packages.
+Update all installed packages to their latest releases. Also updates `wow` itself.
 
 ```sh
-wow update                          # update everything
-wow update go-toolchain             # update one package by name
-wow update wow-look-at-my/wow-cli   # update one package by slug
+wow update
 ```
 
 #### `list`
