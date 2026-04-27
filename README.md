@@ -78,6 +78,14 @@ Print the install path of a package.
 wow which go-toolchain
 ```
 
+#### `version`
+
+Print the build version of the running `wow` binary. Prints `(dev)` for builds from a dirty working tree or without VCS info.
+
+```sh
+wow version
+```
+
 ## State
 
 Package state is stored as JSON at:

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"testing"
 	"time"
@@ -543,6 +544,62 @@ func TestExecute_Succeeds(t *testing.T) {
 	rootCmd.SetArgs([]string{"list"})
 	rootCmd.SetOut(new(bytes.Buffer))
 	Execute()
+}
+
+// ---- version command ------------------------------------------------------
+
+func TestVersion_WithBuildVersion(t *testing.T) {
+	old := buildVersion
+	buildVersion = "v0.0.1234567890"
+	t.Cleanup(func() { buildVersion = old })
+
+	out, err := execute(t, "version")
+	require.Nil(t, err)
+	assert.Contains(t, out, "v0.0.1234567890")
+}
+
+func TestVersion_Dev(t *testing.T) {
+	old := buildVersion
+	buildVersion = ""
+	t.Cleanup(func() { buildVersion = old })
+
+	out, err := execute(t, "version")
+	require.Nil(t, err)
+	assert.Contains(t, out, "(dev)")
+}
+
+func TestVersionFromBuildInfo_Tagged(t *testing.T) {
+	info := &debug.BuildInfo{
+		Settings: []debug.BuildSetting{
+			{Key: "vcs.time", Value: "2026-04-27T09:52:22Z"},
+			{Key: "vcs.modified", Value: "false"},
+		},
+	}
+	assert.Equal(t, "v0.0.1777283542", versionFromBuildInfo(info))
+}
+
+func TestVersionFromBuildInfo_DirtyTree(t *testing.T) {
+	info := &debug.BuildInfo{
+		Settings: []debug.BuildSetting{
+			{Key: "vcs.time", Value: "2026-04-27T09:52:22Z"},
+			{Key: "vcs.modified", Value: "true"},
+		},
+	}
+	assert.Equal(t, "", versionFromBuildInfo(info))
+}
+
+func TestVersionFromBuildInfo_NoVCS(t *testing.T) {
+	info := &debug.BuildInfo{Settings: nil}
+	assert.Equal(t, "", versionFromBuildInfo(info))
+}
+
+func TestVersionFromBuildInfo_BadTime(t *testing.T) {
+	info := &debug.BuildInfo{
+		Settings: []debug.BuildSetting{
+			{Key: "vcs.time", Value: "not-a-date"},
+		},
+	}
+	assert.Equal(t, "", versionFromBuildInfo(info))
 }
 
 // ---- search command -------------------------------------------------------

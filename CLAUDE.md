@@ -23,6 +23,8 @@ cmd/
   uninstall.go   # wow uninstall
   list.go        # wow list
   which.go       # wow which
+  search.go      # wow search
+  version.go     # wow version + buildVersion detection from debug.ReadBuildInfo
   cmd_test.go    # all command tests (mock selfupdate source)
 store/
   store.go       # JSON state at ~/.local/share/wow/packages.json
@@ -44,6 +46,14 @@ Each command file registers itself via `init()` — do not add registration call
 **`store.Store`** — the registry, backed by `packages.json`. Lookup works by either slug or binary name.
 
 State directory resolution order: `$WOW_STATE_DIR` → `$XDG_DATA_HOME/wow` → `~/.local/share/wow`.
+
+## Build version detection
+
+`buildVersion` (in `cmd/root.go`) is populated at startup from `runtime/debug.ReadBuildInfo()` — specifically the `vcs.time` build setting, formatted as `v0.0.<unix-seconds>` to match the autorelease tag scheme.
+
+This works because `go build` automatically embeds VCS info into binaries since Go 1.18. We do **not** rely on `-ldflags -X` injection: go-toolchain hardcodes its ldflags prefix to its own import path (`github.com/wow-look-at-my/go-toolchain/src/cmd.buildVersion`), so any `-X` it emits silently no-ops against wow-cli's variable. `runtime/debug.ReadBuildInfo()` sidesteps this entirely.
+
+Dirty trees (`vcs.modified=true`) and non-VCS builds leave `buildVersion` empty, which disables the self-update branch in `wow update` and makes `wow version` print `(dev)`.
 
 ## Testing
 
