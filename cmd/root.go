@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	selfupdate "github.com/wow-look-at-my/go-selfupdate-mini"
 	"github.com/spf13/cobra"
@@ -54,6 +55,14 @@ func newUpdater() (*selfupdate.Updater, error) {
 		return selfupdate.NewUpdater(*testUpdaterConfig)
 	}
 	return selfupdate.NewUpdater(selfupdate.Config{})
+}
+
+// normalizeSlug expands a bare repo name to "wow-look-at-my/<name>".
+func normalizeSlug(slug string) string {
+	if !strings.Contains(slug, "/") {
+		return "wow-look-at-my/" + slug
+	}
+	return slug
 }
 
 // detectLatest returns the latest release for the given slug.

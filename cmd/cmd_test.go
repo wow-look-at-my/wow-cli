@@ -267,6 +267,23 @@ func TestInstall_DefaultName(t *testing.T) {
 
 }
 
+func TestInstall_BareNameDefaultsOrg(t *testing.T) {
+	withTempState(t)
+	withMockUpdater(t, "mytool", "v1.0.0")
+
+	tmp := t.TempDir()
+	destPath := filepath.Join(tmp, "mytool")
+
+	_, err := execute(t, "install", "mytool", "--path", destPath)
+	require.Nil(t, err)
+
+	s, _ := store.Load()
+	pkg := s.Find("mytool")
+	require.NotNil(t, pkg)
+
+	assert.Equal(t, "wow-look-at-my/mytool", pkg.Slug)
+}
+
 // ---- update command ------------------------------------------------------
 
 func TestUpdate_NoPackages(t *testing.T) {
