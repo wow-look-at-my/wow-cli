@@ -3,7 +3,10 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -359,4 +362,48 @@ func TestExecute_Succeeds(t *testing.T) {
 	rootCmd.SetArgs([]string{"list"})
 	rootCmd.SetOut(new(bytes.Buffer))
 	Execute()
+}
+
+// ---- search command -------------------------------------------------------
+
+func withMockSearchServer(t *testing.T, body string) {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, body)
+	}))
+	t.Cleanup(func() {
+		srv.Close()
+		ghSearchBaseURL = "https://api.github.com"
+	})
+	ghSearchBaseURL = srv.URL
+}
+
+func TestSearch_Results(t *testing.T) {
+	withMockSearchServer(t, `{"items":[{"full_name":"wow-look-at-my/go-toolchain","description":"Go toolchain manager"}]}`)
+
+	out, err := execute(t, "search", "go-toolchain")
+	require.Nil(t, err)
+
+	assert.Contains(t, out, "wow-look-at-my/go-toolchain")
+	assert.Contains(t, out, "Go toolchain manager")
+}
+
+func TestSearch_NoResults(t *testing.T) {
+	withMockSearchServer(t, `{"items":[]}`)
+
+	out, err := execute(t, "search", "nonexistent")
+	require.Nil(t, err)
+
+	assert.Contains(t, out, "No results found")
+}
+
+func TestSearch_NoDescription(t *testing.T) {
+	withMockSearchServer(t, `{"items":[{"full_name":"wow-look-at-my/bare","description":""}]}`)
+
+	out, err := execute(t, "search", "bare")
+	require.Nil(t, err)
+
+	assert.Contains(t, out, "wow-look-at-my/bare")
+	assert.NotContains(t, out, "—")
 }
