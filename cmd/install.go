@@ -10,7 +10,7 @@ import (
 )
 
 var installCmd = &cobra.Command{
-	Use:   "install <owner/repo>",
+	Use:   "install <name|owner/repo>",
 	Short: "Download and install a binary from a GitHub release",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runInstall,
@@ -30,7 +30,7 @@ func init() {
 }
 
 func runInstall(cmd *cobra.Command, args []string) error {
-	slug := args[0]
+	slug := normalizeSlug(args[0])
 
 	name := installName
 	if name == "" {

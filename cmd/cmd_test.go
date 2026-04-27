@@ -3,7 +3,10 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -267,6 +270,23 @@ func TestInstall_DefaultName(t *testing.T) {
 
 }
 
+func TestInstall_BareNameDefaultsOrg(t *testing.T) {
+	withTempState(t)
+	withMockUpdater(t, "mytool", "v1.0.0")
+
+	tmp := t.TempDir()
+	destPath := filepath.Join(tmp, "mytool")
+
+	_, err := execute(t, "install", "mytool", "--path", destPath)
+	require.Nil(t, err)
+
+	s, _ := store.Load()
+	pkg := s.Find("mytool")
+	require.NotNil(t, pkg)
+
+	assert.Equal(t, "wow-look-at-my/mytool", pkg.Slug)
+}
+
 // ---- update command ------------------------------------------------------
 
 func TestUpdate_NoPackages(t *testing.T) {
@@ -286,7 +306,7 @@ func TestUpdate_AlreadyLatest(t *testing.T) {
 	s.Add(&store.Package{Slug: "owner/mytool", Name: "mytool", Path: "/tmp/mytool", Version: "v1.0.0"})
 	s.Save()
 
-	out, err := execute(t, "update", "mytool")
+	out, err := execute(t, "update")
 	require.Nil(t, err)
 
 	assert.Contains(t, out, "already up to date")
@@ -315,7 +335,7 @@ func TestUpdate_NewVersion(t *testing.T) {
 
 }
 
-func TestUpdate_NotInstalled(t *testing.T) {
+func TestUpdate_RejectsArgs(t *testing.T) {
 	withTempState(t)
 	_, err := execute(t, "update", "nonexistent")
 	assert.NotNil(t, err)
@@ -342,4 +362,70 @@ func TestExecute_Succeeds(t *testing.T) {
 	rootCmd.SetArgs([]string{"list"})
 	rootCmd.SetOut(new(bytes.Buffer))
 	Execute()
+}
+
+// ---- search command -------------------------------------------------------
+
+func withMockSearchServer(t *testing.T, body string) {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, body)
+	}))
+	t.Cleanup(func() {
+		srv.Close()
+		ghSearchBaseURL = "https://api.github.com"
+	})
+	ghSearchBaseURL = srv.URL
+}
+
+func TestSearch_Results(t *testing.T) {
+	withMockSearchServer(t, `{"items":[{"full_name":"wow-look-at-my/go-toolchain","description":"Go toolchain manager"}]}`)
+
+	out, err := execute(t, "search", "go-toolchain")
+	require.Nil(t, err)
+
+	assert.Contains(t, out, "wow-look-at-my/go-toolchain")
+	assert.Contains(t, out, "Go toolchain manager")
+}
+
+func TestSearch_NoResults(t *testing.T) {
+	withMockSearchServer(t, `{"items":[]}`)
+
+	out, err := execute(t, "search", "nonexistent")
+	require.Nil(t, err)
+
+	assert.Contains(t, out, "No results found")
+}
+
+func TestSearch_NoDescription(t *testing.T) {
+	withMockSearchServer(t, `{"items":[{"full_name":"wow-look-at-my/bare","description":""}]}`)
+
+	out, err := execute(t, "search", "bare")
+	require.Nil(t, err)
+
+	assert.Contains(t, out, "wow-look-at-my/bare")
+	assert.NotContains(t, out, "—")
+}
+
+func TestSearch_IgnoresGHHost(t *testing.T) {
+	t.Setenv("GH_HOST", "github.mycompany.com")
+	t.Setenv("GITHUB_TOKEN", "enterprise-token")
+
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"items":[]}`)
+	}))
+	t.Cleanup(func() {
+		srv.Close()
+		ghSearchBaseURL = "https://api.github.com"
+	})
+	ghSearchBaseURL = srv.URL
+
+	_, err := execute(t, "search", "anything")
+	require.Nil(t, err)
+
+	assert.Empty(t, gotAuth, "should not send token when GH_HOST is set")
 }

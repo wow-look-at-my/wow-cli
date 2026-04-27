@@ -8,9 +8,9 @@ import (
 )
 
 var updateCmd = &cobra.Command{
-	Use:   "update [<name|owner/repo>...]",
-	Short: "Update installed packages to their latest release",
-	Long:  "Updates all installed packages when no arguments are given, or the named packages.",
+	Use:   "update",
+	Short: "Update all installed packages to their latest release",
+	Args:  cobra.NoArgs,
 	RunE:  runUpdate,
 }
 
@@ -18,27 +18,16 @@ func init() {
 	rootCmd.AddCommand(updateCmd)
 }
 
-func runUpdate(cmd *cobra.Command, args []string) error {
+func runUpdate(cmd *cobra.Command, _ []string) error {
 	s, err := store.Load()
 	if err != nil {
 		return err
 	}
 
-	var targets []*store.Package
-	if len(args) == 0 {
-		targets = s.All()
-		if len(targets) == 0 {
-			fmt.Fprintln(cmd.OutOrStdout(), "No packages installed.")
-			return nil
-		}
-	} else {
-		for _, arg := range args {
-			pkg := s.Find(arg)
-			if pkg == nil {
-				return fmt.Errorf("not installed: %s", arg)
-			}
-			targets = append(targets, pkg)
-		}
+	targets := s.All()
+	if len(targets) == 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "No packages installed.")
+		return nil
 	}
 
 	for _, pkg := range targets {
