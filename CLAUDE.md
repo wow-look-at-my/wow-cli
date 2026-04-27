@@ -24,7 +24,7 @@ cmd/
   list.go        # wow list
   which.go       # wow which
   search.go      # wow search
-  version.go     # registers selfupdate.NewVersionCommand + buildVersion detection from debug.ReadBuildInfo
+  version.go     # wow version (with --bare and DetectLatest age info) + buildVersion detection from debug.ReadBuildInfo
   cmd_test.go    # all command tests (mock selfupdate source)
 store/
   store.go       # JSON state at ~/.local/share/wow/packages.json
@@ -55,7 +55,7 @@ This works because `go build` automatically embeds VCS info into binaries since 
 
 Dirty trees (`vcs.modified=true`) and non-VCS builds leave `buildVersion` empty, which disables the self-update branch in `wow update` and makes `wow version --bare` print an empty line.
 
-The `wow version` cobra command itself is just `selfupdate.NewVersionCommand` from `go-selfupdate-mini`, registered in `cmd/version.go`'s `init()` after `populateBuildVersion()` runs. `rootCmd.Version = buildVersion` is also set there so `wow --version` works on release builds.
+`cmd/version.go` defines the `wow version` cobra command directly (with a `--bare` flag and a default mode that calls `up.DetectLatest` and prints current+latest+age). It does not delegate to `selfupdate.RegisterCommands` because that bundle would also register conflicting `install` and `update` commands. `rootCmd.Version = buildVersion` is set in the same `init()` after `populateBuildVersion()` so `wow --version` works on release builds.
 
 ## Testing
 
