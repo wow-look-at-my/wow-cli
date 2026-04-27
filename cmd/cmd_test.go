@@ -92,6 +92,19 @@ func (s *mockSourcePerSlug) DownloadReleaseAsset(_ context.Context, _ *selfupdat
 	return io.NopCloser(strings.NewReader("#!/bin/sh\necho mock\n")), nil
 }
 
+// withMockUpdaterPerSlug sets up a slug-aware mock updater for the test duration.
+func withMockUpdaterPerSlug(t *testing.T, perSlug map[string][]selfupdate.SourceRelease) {
+	t.Helper()
+	cfg := selfupdate.Config{
+		Source: &mockSourcePerSlug{perSlug: perSlug},
+		Install: func(r io.Reader, dest string) error {
+			return os.WriteFile(dest, []byte("#!/bin/sh\necho mock\n"), 0o755)
+		},
+	}
+	testUpdaterConfig = &cfg
+	t.Cleanup(func() { testUpdaterConfig = nil })
+}
+
 // assetForPlatform returns an asset name matching the current platform.
 func assetForPlatform(binary string) string {
 	goos := runtime.GOOS
@@ -302,29 +315,22 @@ func TestInstall_BareNameDefaultsOrg(t *testing.T) {
 	assert.Equal(t, "wow-look-at-my/mytool", pkg.Slug)
 }
 
-func TestInstall_GoFallback(t *testing.T) {
+func TestInstall_DidYouMean_UserConfirms(t *testing.T) {
 	withTempState(t)
 
 	goAsset := assetForPlatform("ccze-go")
-	cfg := selfupdate.Config{
-		Source: &mockSourcePerSlug{
-			perSlug: map[string][]selfupdate.SourceRelease{
-				// wow-look-at-my/ccze has no releases
-				"wow-look-at-my/ccze-go": {
-					&mockRelease{tag: "v0.0.1", assets: []selfupdate.SourceAsset{&mockAsset{name: goAsset}}},
-				},
-			},
+	withMockUpdaterPerSlug(t, map[string][]selfupdate.SourceRelease{
+		// wow-look-at-my/ccze has no releases; ccze-go has one
+		"wow-look-at-my/ccze-go": {
+			&mockRelease{tag: "v0.0.1", assets: []selfupdate.SourceAsset{&mockAsset{name: goAsset}}},
 		},
-		Install: func(r io.Reader, dest string) error {
-			return os.WriteFile(dest, []byte("#!/bin/sh\necho mock\n"), 0o755)
-		},
-	}
-	testUpdaterConfig = &cfg
-	t.Cleanup(func() { testUpdaterConfig = nil })
+	})
+	withMockSearchServer(t, `{"items":[{"full_name":"wow-look-at-my/ccze-go","description":"ccze colorizer"}]}`)
 
 	tmp := t.TempDir()
 	destPath := filepath.Join(tmp, "ccze")
 
+	rootCmd.SetIn(strings.NewReader("y\n"))
 	out, err := execute(t, "install", "ccze", "--path", destPath)
 	require.Nil(t, err)
 	assert.Contains(t, out, "Installed")
@@ -336,17 +342,41 @@ func TestInstall_GoFallback(t *testing.T) {
 	assert.Equal(t, "wow-look-at-my/ccze-go", pkg.Slug)
 }
 
-func TestInstall_GoFallback_ExplicitSlugNoFallback(t *testing.T) {
+func TestInstall_DidYouMean_UserDeclines(t *testing.T) {
 	withTempState(t)
 
-	cfg := selfupdate.Config{
-		Source: &mockSourcePerSlug{perSlug: map[string][]selfupdate.SourceRelease{}},
-	}
-	testUpdaterConfig = &cfg
-	t.Cleanup(func() { testUpdaterConfig = nil })
+	goAsset := assetForPlatform("ccze-go")
+	withMockUpdaterPerSlug(t, map[string][]selfupdate.SourceRelease{
+		"wow-look-at-my/ccze-go": {
+			&mockRelease{tag: "v0.0.1", assets: []selfupdate.SourceAsset{&mockAsset{name: goAsset}}},
+		},
+	})
+	withMockSearchServer(t, `{"items":[{"full_name":"wow-look-at-my/ccze-go","description":"ccze colorizer"}]}`)
+
+	rootCmd.SetIn(strings.NewReader("n\n"))
+	_, err := execute(t, "install", "ccze")
+	assert.NotNil(t, err)
+}
+
+func TestInstall_DidYouMean_NoMatch(t *testing.T) {
+	withTempState(t)
+
+	withMockUpdaterPerSlug(t, map[string][]selfupdate.SourceRelease{})
+	withMockSearchServer(t, `{"items":[]}`)
+
+	_, err := execute(t, "install", "nonexistent")
+	assert.NotNil(t, err)
+}
+
+func TestInstall_DidYouMean_ExplicitSlugNoSearch(t *testing.T) {
+	withTempState(t)
+
+	withMockUpdaterPerSlug(t, map[string][]selfupdate.SourceRelease{})
+	// Search server never called for explicit slugs; any accidental call returns nothing.
+	withMockSearchServer(t, `{"items":[]}`)
 
 	_, err := execute(t, "install", "owner/ccze")
-	assert.NotNil(t, err, "explicit slug with no releases should error without trying fallback")
+	assert.NotNil(t, err)
 }
 
 // ---- update command ------------------------------------------------------

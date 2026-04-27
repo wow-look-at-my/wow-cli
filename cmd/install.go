@@ -65,14 +65,12 @@ func runInstall(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		if rel == nil {
-			if goSlug := goFallbackSlug(args[0], slug); goSlug != "" {
-				rel, _, err = up.DetectVersion(context.Background(), selfupdate.ParseSlug(goSlug), installVersion)
-				if err != nil {
-					return err
-				}
-				if rel != nil {
-					slug = goSlug
-				}
+			slug, rel, err = suggestAndConfirm(cmd, args[0], slug, func(s string) (*selfupdate.Release, error) {
+				r, _, e := up.DetectVersion(context.Background(), selfupdate.ParseSlug(s), installVersion)
+				return r, e
+			})
+			if err != nil {
+				return err
 			}
 			if rel == nil {
 				return fmt.Errorf("version %s not found for %s", installVersion, slug)
@@ -82,15 +80,12 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(cmd.OutOrStdout(), "Fetching latest release for %s...\n", slug)
 		rel, err = detectLatest(slug)
 		if err != nil {
-			if goSlug := goFallbackSlug(args[0], slug); goSlug != "" {
-				if goRel, goErr := detectLatest(goSlug); goErr == nil {
-					rel = goRel
-					slug = goSlug
-					err = nil
-				}
-			}
+			slug, rel, err = suggestAndConfirm(cmd, args[0], slug, detectLatest)
 			if err != nil {
 				return err
+			}
+			if rel == nil {
+				return fmt.Errorf("no release found for %s", slug)
 			}
 		}
 	}
@@ -118,11 +113,31 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// goFallbackSlug returns a fallback slug with "-go" appended to the repo name,
-// but only when the user gave a bare name (no "/"). Returns "" if not applicable.
-func goFallbackSlug(input, currentSlug string) string {
+// suggestAndConfirm searches for a near match when the primary slug has no release,
+// then asks the user whether to proceed with it. Only applies to bare names (no "/").
+// Returns the slug, release, and error to use going forward.
+func suggestAndConfirm(cmd *cobra.Command, input, failedSlug string, detect func(string) (*selfupdate.Release, error)) (slug string, rel *selfupdate.Release, err error) {
 	if strings.Contains(input, "/") {
-		return ""
+		return failedSlug, nil, nil
 	}
-	return currentSlug + "-go"
+
+	match, searchErr := findBestOrgMatch(context.Background(), input)
+	if searchErr != nil || match == "" || match == failedSlug {
+		return failedSlug, nil, nil
+	}
+
+	// See if the suggested repo has a release before bothering the user.
+	candidate, candErr := detect(match)
+	if candErr != nil || candidate == nil {
+		return failedSlug, nil, nil
+	}
+
+	fmt.Fprintf(cmd.ErrOrStderr(), "No release found for %s.\nDid you mean %s? [y/N] ", failedSlug, match)
+	var answer string
+	fmt.Fscan(cmd.InOrStdin(), &answer)
+	if !strings.EqualFold(strings.TrimSpace(answer), "y") {
+		return failedSlug, nil, nil
+	}
+
+	return match, candidate, nil
 }
