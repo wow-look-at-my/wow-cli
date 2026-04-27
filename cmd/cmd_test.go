@@ -303,7 +303,7 @@ func TestUpdate_AlreadyLatest(t *testing.T) {
 	s.Add(&store.Package{Slug: "owner/mytool", Name: "mytool", Path: "/tmp/mytool", Version: "v1.0.0"})
 	s.Save()
 
-	out, err := execute(t, "update", "mytool")
+	out, err := execute(t, "update")
 	require.Nil(t, err)
 
 	assert.Contains(t, out, "already up to date")
@@ -332,7 +332,7 @@ func TestUpdate_NewVersion(t *testing.T) {
 
 }
 
-func TestUpdate_NotInstalled(t *testing.T) {
+func TestUpdate_RejectsArgs(t *testing.T) {
 	withTempState(t)
 	_, err := execute(t, "update", "nonexistent")
 	assert.NotNil(t, err)
