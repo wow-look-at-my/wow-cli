@@ -80,7 +80,7 @@ wow which go-toolchain
 
 #### `version`
 
-Print the build version of the running `wow` binary along with the latest available release. Use `--bare` to print only the current version string. Dev builds (dirty working tree or no VCS info) print an empty version.
+Print the build version of the running `wow` binary along with the latest available release. Use `--bare` to print only the current version string. Dirty trees get a `+dirty` suffix; binaries built outside of a VCS checkout fall back to whatever `runtime/debug.ReadBuildInfo` reports (typically `(devel)`).
 
 ```sh
 wow version

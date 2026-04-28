@@ -540,9 +540,9 @@ func TestUpdate_SelfUpdateAlreadyLatest(t *testing.T) {
 	withTempState(t)
 	withMockUpdater(t, "wow-cli", "v2.0.0")
 
-	old := buildVersion
-	buildVersion = "v2.0.0"
-	t.Cleanup(func() { buildVersion = old })
+	old := selfupdate.EmbeddedVersion
+	selfupdate.EmbeddedVersion = "v2.0.0"
+	t.Cleanup(func() { selfupdate.EmbeddedVersion = old })
 
 	out, err := execute(t, "update")
 	require.Nil(t, err)
@@ -565,9 +565,9 @@ func TestUpdate_SelfUpdateNewVersion(t *testing.T) {
 	wowExePathOverride = exePath
 	t.Cleanup(func() { wowExePathOverride = oldExe })
 
-	old := buildVersion
-	buildVersion = "v1.0.0"
-	t.Cleanup(func() { buildVersion = old })
+	old := selfupdate.EmbeddedVersion
+	selfupdate.EmbeddedVersion = "v1.0.0"
+	t.Cleanup(func() { selfupdate.EmbeddedVersion = old })
 
 	out, err := execute(t, "update")
 	require.Nil(t, err)
@@ -596,9 +596,9 @@ func TestUpdate_SelfUpdateUsesRealExePath(t *testing.T) {
 	testUpdaterConfig = &cfg
 	t.Cleanup(func() { testUpdaterConfig = nil })
 
-	old := buildVersion
-	buildVersion = "v1.0.0"
-	t.Cleanup(func() { buildVersion = old })
+	old := selfupdate.EmbeddedVersion
+	selfupdate.EmbeddedVersion = "v1.0.0"
+	t.Cleanup(func() { selfupdate.EmbeddedVersion = old })
 	// wowExePathOverride intentionally not set — exercises os.Executable() path.
 
 	out, err := execute(t, "update")
@@ -616,9 +616,9 @@ func TestUpdate_SelfUpdateDetectError(t *testing.T) {
 	testUpdaterConfig = &cfg
 	t.Cleanup(func() { testUpdaterConfig = nil })
 
-	old := buildVersion
-	buildVersion = "v1.0.0"
-	t.Cleanup(func() { buildVersion = old })
+	old := selfupdate.EmbeddedVersion
+	selfupdate.EmbeddedVersion = "v1.0.0"
+	t.Cleanup(func() { selfupdate.EmbeddedVersion = old })
 
 	_, err := execute(t, "update")
 	require.NotNil(t, err)

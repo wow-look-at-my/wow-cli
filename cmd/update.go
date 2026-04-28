@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
+	selfupdate "github.com/wow-look-at-my/go-selfupdate-mini"
 	"github.com/wow-look-at-my/wow-cli/store"
 )
 
@@ -41,12 +43,27 @@ func runUpdate(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	if buildVersion != "" {
-		if err := selfUpdateWow(cmd); err != nil {
+	v := selfupdate.CurrentVersion()
+	if shouldSelfUpdateWow(v) {
+		if err := selfUpdateWow(cmd, v); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// shouldSelfUpdateWow returns true when the running binary's version is a
+// real autorelease tag we can compare against the latest release. Empty
+// strings, the "(devel)" fallback, and "+dirty" suffixes all indicate a build
+// that should not be silently overwritten.
+func shouldSelfUpdateWow(v string) bool {
+	if v == "" || v == "(devel)" {
+		return false
+	}
+	if strings.Contains(v, "+dirty") {
+		return false
+	}
+	return true
 }
 
 func updateOne(cmd *cobra.Command, s *store.Store, pkg *store.Package) error {
@@ -76,7 +93,7 @@ func updateOne(cmd *cobra.Command, s *store.Store, pkg *store.Package) error {
 	return nil
 }
 
-func selfUpdateWow(cmd *cobra.Command) error {
+func selfUpdateWow(cmd *cobra.Command, current string) error {
 	const slug = "wow-look-at-my/wow-cli"
 	fmt.Fprintf(cmd.OutOrStdout(), "Checking latest release for %s...\n", slug)
 
@@ -85,8 +102,8 @@ func selfUpdateWow(cmd *cobra.Command) error {
 		return err
 	}
 
-	if rel.Version.Original == buildVersion {
-		fmt.Fprintf(cmd.OutOrStdout(), "wow is already up to date (%s)\n", buildVersion)
+	if rel.Version.Original == current {
+		fmt.Fprintf(cmd.OutOrStdout(), "wow is already up to date (%s)\n", current)
 		return nil
 	}
 
@@ -103,7 +120,7 @@ func selfUpdateWow(cmd *cobra.Command) error {
 		}
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "Updating wow %s -> %s...\n", buildVersion, rel.Version.Original)
+	fmt.Fprintf(cmd.OutOrStdout(), "Updating wow %s -> %s...\n", current, rel.Version.Original)
 	if err := installRelease(rel, exePath); err != nil {
 		return err
 	}
