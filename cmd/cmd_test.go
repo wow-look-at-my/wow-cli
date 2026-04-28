@@ -137,6 +137,75 @@ func withMockUpdater(t *testing.T, binary, tag string) {
 	t.Cleanup(func() { testUpdaterConfig = nil })
 }
 
+// ---- installAtomic -------------------------------------------------------
+
+func TestInstallAtomic_FreshInstall(t *testing.T) {
+	tmp := t.TempDir()
+	target := filepath.Join(tmp, "mytool")
+
+	require.Nil(t, installAtomic(strings.NewReader("hello"), target))
+
+	data, err := os.ReadFile(target)
+	require.Nil(t, err)
+	assert.Equal(t, "hello", string(data))
+
+	// No stale .new/.old siblings should remain.
+	entries, _ := os.ReadDir(tmp)
+	assert.Equal(t, 1, len(entries))
+}
+
+func TestInstallAtomic_OverwritesExisting(t *testing.T) {
+	tmp := t.TempDir()
+	target := filepath.Join(tmp, "mytool")
+	require.Nil(t, os.WriteFile(target, []byte("old"), 0o755))
+
+	require.Nil(t, installAtomic(strings.NewReader("new"), target))
+
+	data, err := os.ReadFile(target)
+	require.Nil(t, err)
+	assert.Equal(t, "new", string(data))
+
+	entries, _ := os.ReadDir(tmp)
+	assert.Equal(t, 1, len(entries))
+}
+
+func TestInstallAtomic_ClearsStaleOld(t *testing.T) {
+	tmp := t.TempDir()
+	target := filepath.Join(tmp, "mytool")
+	stale := filepath.Join(tmp, ".mytool.old")
+	require.Nil(t, os.WriteFile(stale, []byte("stale"), 0o755))
+
+	require.Nil(t, installAtomic(strings.NewReader("fresh"), target))
+
+	data, err := os.ReadFile(target)
+	require.Nil(t, err)
+	assert.Equal(t, "fresh", string(data))
+
+	_, err = os.Stat(stale)
+	assert.True(t, os.IsNotExist(err))
+}
+
+type errReader struct{}
+
+func (errReader) Read([]byte) (int, error) { return 0, fmt.Errorf("read failed") }
+
+func TestInstallAtomic_ReadError(t *testing.T) {
+	tmp := t.TempDir()
+	target := filepath.Join(tmp, "mytool")
+
+	err := installAtomic(errReader{}, target)
+	require.NotNil(t, err)
+	assert.Contains(t, err.Error(), "read failed")
+}
+
+func TestInstallAtomic_WriteError(t *testing.T) {
+	// Target directory does not exist — WriteFile of the .new sibling fails.
+	target := filepath.Join(t.TempDir(), "no-such-dir", "mytool")
+
+	err := installAtomic(strings.NewReader("hello"), target)
+	require.NotNil(t, err)
+}
+
 // ---- platform detection tests --------------------------------------------
 
 func TestBinaryExt(t *testing.T) {
@@ -279,6 +348,39 @@ func TestInstall(t *testing.T) {
 
 	assert.Equal(t, "v0.0.1", pkg.Version)
 
+}
+
+// TestInstall_FreshInstall_RealInstaller exercises the production install
+// path (installAtomic) end-to-end, regressing the bug where fresh installs
+// failed because the upstream defaultInstall rename'd a non-existent target.
+func TestInstall_FreshInstall_RealInstaller(t *testing.T) {
+	withTempState(t)
+
+	asset := assetForPlatform("mytool")
+	cfg := selfupdate.Config{
+		Source: &mockSource{
+			releases: []selfupdate.SourceRelease{
+				&mockRelease{
+					tag:    "v0.0.1",
+					assets: []selfupdate.SourceAsset{&mockAsset{name: asset}},
+				},
+			},
+		},
+		Install: installAtomic,
+	}
+	testUpdaterConfig = &cfg
+	t.Cleanup(func() { testUpdaterConfig = nil })
+
+	tmp := t.TempDir()
+	destPath := filepath.Join(tmp, "mytool")
+
+	out, err := execute(t, "install", "owner/mytool", "--path", destPath)
+	require.Nil(t, err)
+	assert.Contains(t, out, "Installed")
+
+	info, err := os.Stat(destPath)
+	require.Nil(t, err)
+	assert.True(t, info.Size() > 0)
 }
 
 func TestInstall_DefaultName(t *testing.T) {
