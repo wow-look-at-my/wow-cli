@@ -20,9 +20,6 @@ import (
 // Set only from tests.
 var testUpdaterConfig *selfupdate.Config
 
-// buildVersion is set at build time via -ldflags.
-var buildVersion string
-
 var rootCmd = &cobra.Command{
 	Use:   "wow",
 	Short: "Package manager for go-toolchain autorelease pattern programs",
