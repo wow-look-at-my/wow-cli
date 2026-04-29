@@ -2,7 +2,10 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -16,9 +19,6 @@ import (
 // testUpdaterConfig, when non-nil, is used instead of the default Config.
 // Set only from tests.
 var testUpdaterConfig *selfupdate.Config
-
-// buildVersion is set at build time via -ldflags.
-var buildVersion string
 
 var rootCmd = &cobra.Command{
 	Use:   "wow",
@@ -57,7 +57,57 @@ func newUpdater() (*selfupdate.Updater, error) {
 	if testUpdaterConfig != nil {
 		return selfupdate.NewUpdater(*testUpdaterConfig)
 	}
-	return selfupdate.NewUpdater(selfupdate.Config{})
+	return selfupdate.NewUpdater(selfupdate.Config{Install: installAtomic})
+}
+
+// installAtomic atomically writes src to targetPath. It mirrors upstream
+// defaultInstall's Windows-friendly .new/.old rename dance but tolerates a
+// missing target (fresh install): defaultInstall's unconditional rename of
+// targetPath to .old fails when the target doesn't yet exist.
+func installAtomic(src io.Reader, targetPath string) error {
+	newBytes, err := io.ReadAll(src)
+	if err != nil {
+		return err
+	}
+
+	dir := filepath.Dir(targetPath)
+	filename := filepath.Base(targetPath)
+
+	newPath := filepath.Join(dir, fmt.Sprintf(".%s.new", filename))
+	if err := os.WriteFile(newPath, newBytes, 0o755); err != nil {
+		return err
+	}
+
+	oldPath := filepath.Join(dir, fmt.Sprintf(".%s.old", filename))
+	_ = os.Remove(oldPath) // stale .old from a prior failed update (Windows)
+
+	_, statErr := os.Lstat(targetPath)
+	targetExists := statErr == nil
+	if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
+		_ = os.Remove(newPath)
+		return statErr
+	}
+
+	if targetExists {
+		if err := os.Rename(targetPath, oldPath); err != nil {
+			_ = os.Remove(newPath)
+			return err
+		}
+	}
+
+	if err := os.Rename(newPath, targetPath); err != nil {
+		if targetExists {
+			if rerr := os.Rename(oldPath, targetPath); rerr != nil {
+				return fmt.Errorf("install failed (%w) and rollback also failed (%v)", err, rerr)
+			}
+		}
+		return err
+	}
+
+	if targetExists {
+		_ = os.Remove(oldPath)
+	}
+	return nil
 }
 
 // normalizeSlug expands a bare repo name to "wow-look-at-my/<name>".

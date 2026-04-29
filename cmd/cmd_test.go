@@ -136,6 +136,75 @@ func withMockUpdater(t *testing.T, binary, tag string) {
 	t.Cleanup(func() { testUpdaterConfig = nil })
 }
 
+// ---- installAtomic -------------------------------------------------------
+
+func TestInstallAtomic_FreshInstall(t *testing.T) {
+	tmp := t.TempDir()
+	target := filepath.Join(tmp, "mytool")
+
+	require.Nil(t, installAtomic(strings.NewReader("hello"), target))
+
+	data, err := os.ReadFile(target)
+	require.Nil(t, err)
+	assert.Equal(t, "hello", string(data))
+
+	// No stale .new/.old siblings should remain.
+	entries, _ := os.ReadDir(tmp)
+	assert.Equal(t, 1, len(entries))
+}
+
+func TestInstallAtomic_OverwritesExisting(t *testing.T) {
+	tmp := t.TempDir()
+	target := filepath.Join(tmp, "mytool")
+	require.Nil(t, os.WriteFile(target, []byte("old"), 0o755))
+
+	require.Nil(t, installAtomic(strings.NewReader("new"), target))
+
+	data, err := os.ReadFile(target)
+	require.Nil(t, err)
+	assert.Equal(t, "new", string(data))
+
+	entries, _ := os.ReadDir(tmp)
+	assert.Equal(t, 1, len(entries))
+}
+
+func TestInstallAtomic_ClearsStaleOld(t *testing.T) {
+	tmp := t.TempDir()
+	target := filepath.Join(tmp, "mytool")
+	stale := filepath.Join(tmp, ".mytool.old")
+	require.Nil(t, os.WriteFile(stale, []byte("stale"), 0o755))
+
+	require.Nil(t, installAtomic(strings.NewReader("fresh"), target))
+
+	data, err := os.ReadFile(target)
+	require.Nil(t, err)
+	assert.Equal(t, "fresh", string(data))
+
+	_, err = os.Stat(stale)
+	assert.True(t, os.IsNotExist(err))
+}
+
+type errReader struct{}
+
+func (errReader) Read([]byte) (int, error) { return 0, fmt.Errorf("read failed") }
+
+func TestInstallAtomic_ReadError(t *testing.T) {
+	tmp := t.TempDir()
+	target := filepath.Join(tmp, "mytool")
+
+	err := installAtomic(errReader{}, target)
+	require.NotNil(t, err)
+	assert.Contains(t, err.Error(), "read failed")
+}
+
+func TestInstallAtomic_WriteError(t *testing.T) {
+	// Target directory does not exist — WriteFile of the .new sibling fails.
+	target := filepath.Join(t.TempDir(), "no-such-dir", "mytool")
+
+	err := installAtomic(strings.NewReader("hello"), target)
+	require.NotNil(t, err)
+}
+
 // ---- platform detection tests --------------------------------------------
 
 func TestBinaryExt(t *testing.T) {
@@ -278,6 +347,39 @@ func TestInstall(t *testing.T) {
 
 	assert.Equal(t, "v0.0.1", pkg.Version)
 
+}
+
+// TestInstall_FreshInstall_RealInstaller exercises the production install
+// path (installAtomic) end-to-end, regressing the bug where fresh installs
+// failed because the upstream defaultInstall rename'd a non-existent target.
+func TestInstall_FreshInstall_RealInstaller(t *testing.T) {
+	withTempState(t)
+
+	asset := assetForPlatform("mytool")
+	cfg := selfupdate.Config{
+		Source: &mockSource{
+			releases: []selfupdate.SourceRelease{
+				&mockRelease{
+					tag:    "v0.0.1",
+					assets: []selfupdate.SourceAsset{&mockAsset{name: asset}},
+				},
+			},
+		},
+		Install: installAtomic,
+	}
+	testUpdaterConfig = &cfg
+	t.Cleanup(func() { testUpdaterConfig = nil })
+
+	tmp := t.TempDir()
+	destPath := filepath.Join(tmp, "mytool")
+
+	out, err := execute(t, "install", "owner/mytool", "--path", destPath)
+	require.Nil(t, err)
+	assert.Contains(t, out, "Installed")
+
+	info, err := os.Stat(destPath)
+	require.Nil(t, err)
+	assert.True(t, info.Size() > 0)
 }
 
 func TestInstall_DefaultName(t *testing.T) {
@@ -438,9 +540,9 @@ func TestUpdate_SelfUpdateAlreadyLatest(t *testing.T) {
 	withTempState(t)
 	withMockUpdater(t, "wow-cli", "v2.0.0")
 
-	old := buildVersion
-	buildVersion = "v2.0.0"
-	t.Cleanup(func() { buildVersion = old })
+	old := selfupdate.EmbeddedVersion
+	selfupdate.EmbeddedVersion = "v2.0.0"
+	t.Cleanup(func() { selfupdate.EmbeddedVersion = old })
 
 	out, err := execute(t, "update")
 	require.Nil(t, err)
@@ -453,33 +555,35 @@ func TestUpdate_SelfUpdateNewVersion(t *testing.T) {
 	withTempState(t)
 	withMockUpdater(t, "wow-cli", "v2.0.0")
 
-	// Write a temp file to stand in for the wow executable.
+	// Write a temp file to stand in for the wow executable; UpdateCommand
+	// stats cmdPath before installing.
 	tmp := t.TempDir()
 	exePath := filepath.Join(tmp, "wow")
 	os.WriteFile(exePath, []byte("#!/bin/sh\necho old\n"), 0o755)
 
-	// Point selfUpdateWow at the temp file instead of the real binary.
 	oldExe := wowExePathOverride
 	wowExePathOverride = exePath
 	t.Cleanup(func() { wowExePathOverride = oldExe })
 
-	old := buildVersion
-	buildVersion = "v1.0.0"
-	t.Cleanup(func() { buildVersion = old })
+	old := selfupdate.EmbeddedVersion
+	selfupdate.EmbeddedVersion = "v1.0.0"
+	t.Cleanup(func() { selfupdate.EmbeddedVersion = old })
 
 	out, err := execute(t, "update")
 	require.Nil(t, err)
 
-	assert.Contains(t, out, "Updating wow")
+	assert.Contains(t, out, "Updated wow")
 	assert.Contains(t, out, "v1.0.0")
 	assert.Contains(t, out, "v2.0.0")
-	assert.Contains(t, out, "Updated wow")
 }
 
 func TestUpdate_SelfUpdateUsesRealExePath(t *testing.T) {
 	withTempState(t)
 
-	// Mock that detects a newer version but errors on install (safe: no file write).
+	// Mock that detects a newer version but errors on install. With no
+	// wowExePathOverride, selfUpdateWow resolves os.Executable() (the test
+	// binary), UpdateCommand stats it (it exists), and the Install error then
+	// propagates back through UpdateTo.
 	asset := assetForPlatform("wow-cli")
 	cfg := selfupdate.Config{
 		Source: &mockSource{
@@ -494,33 +598,49 @@ func TestUpdate_SelfUpdateUsesRealExePath(t *testing.T) {
 	testUpdaterConfig = &cfg
 	t.Cleanup(func() { testUpdaterConfig = nil })
 
-	old := buildVersion
-	buildVersion = "v1.0.0"
-	t.Cleanup(func() { buildVersion = old })
-	// wowExePathOverride intentionally not set — exercises os.Executable() path.
+	old := selfupdate.EmbeddedVersion
+	selfupdate.EmbeddedVersion = "v1.0.0"
+	t.Cleanup(func() { selfupdate.EmbeddedVersion = old })
 
 	out, err := execute(t, "update")
 	require.NotNil(t, err)
-	assert.Contains(t, out, "Updating wow")
+	assert.Contains(t, out, "Checking latest release")
 }
 
-func TestUpdate_SelfUpdateDetectError(t *testing.T) {
+func TestUpdate_SelfUpdate_NoReleasesIsBenign(t *testing.T) {
 	withTempState(t)
 
-	// Source with no releases produces a "no release found" error from detectLatest.
-	cfg := selfupdate.Config{
-		Source: &mockSource{releases: nil},
-	}
+	// Source with zero releases. UpdateCommand returns the current version as
+	// the "latest" without calling Install, so selfUpdateWow prints
+	// "already up to date" instead of erroring.
+	cfg := selfupdate.Config{Source: &mockSource{releases: nil}}
 	testUpdaterConfig = &cfg
 	t.Cleanup(func() { testUpdaterConfig = nil })
 
-	old := buildVersion
-	buildVersion = "v1.0.0"
-	t.Cleanup(func() { buildVersion = old })
+	old := selfupdate.EmbeddedVersion
+	selfupdate.EmbeddedVersion = "v1.0.0"
+	t.Cleanup(func() { selfupdate.EmbeddedVersion = old })
 
-	_, err := execute(t, "update")
-	require.NotNil(t, err)
-	assert.Contains(t, err.Error(), "no release found")
+	out, err := execute(t, "update")
+	require.Nil(t, err)
+	assert.Contains(t, out, "already up to date")
+}
+
+func TestUpdate_SelfUpdate_SkipsDirty(t *testing.T) {
+	withTempState(t)
+
+	// Dirty (or "(devel)") versions must short-circuit before any release
+	// lookup: if selfUpdateWow proceeded, it would print "Checking latest
+	// release for wow-look-at-my/wow-cli..." and we'd see it in stdout.
+	withMockUpdater(t, "wow-cli", "v9.9.9")
+
+	old := selfupdate.EmbeddedVersion
+	selfupdate.EmbeddedVersion = "v1.0.0+dirty"
+	t.Cleanup(func() { selfupdate.EmbeddedVersion = old })
+
+	out, err := execute(t, "update")
+	require.Nil(t, err)
+	assert.NotContains(t, out, "Checking latest release")
 }
 
 func TestInstall_WithVersion(t *testing.T) {

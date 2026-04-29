@@ -23,6 +23,8 @@ cmd/
   uninstall.go   # wow uninstall
   list.go        # wow list
   which.go       # wow which
+  search.go      # wow search
+  version.go     # selfupdate.RegisterCommands(rootCmd, slug) + dedupe library install/update
   cmd_test.go    # all command tests (mock selfupdate source)
 store/
   store.go       # JSON state at ~/.local/share/wow/packages.json
@@ -44,6 +46,14 @@ Each command file registers itself via `init()` — do not add registration call
 **`store.Store`** — the registry, backed by `packages.json`. Lookup works by either slug or binary name.
 
 State directory resolution order: `$WOW_STATE_DIR` → `$XDG_DATA_HOME/wow` → `~/.local/share/wow`.
+
+## Build version detection and self-update
+
+`cmd/version.go`'s `init()` calls `selfupdate.RegisterCommands(rootCmd, slug)` and then drops the library's `install` and `update` commands (we have package-aware versions of both). The library's `version` command stays and serves `wow version` and `wow --version`.
+
+go-selfupdate-mini detects the running binary's version itself: `selfupdate.CurrentVersion()` reads `runtime/debug.ReadBuildInfo()` and, when `Main.Version` is missing/`(devel)`, formats `vcs.time` as `v0.0.<unix-seconds>` (matching the autorelease tag scheme), with `+dirty` appended for modified working trees. We do not need to populate `EmbeddedVersion` ourselves; the library's autorelease branch produces the right format directly from VCS info.
+
+`cmd/update.go`'s `selfUpdateWow` short-circuits on empty / `(devel)` / `+dirty` versions so dev builds are never silently overwritten. The actual self-update goes through `up.UpdateCommand(ctx, exePath, current, slug)` so tests can inject `wowExePathOverride` instead of letting the library resolve `os.Executable()` to the test binary.
 
 ## Testing
 
