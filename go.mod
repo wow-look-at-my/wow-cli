@@ -4,7 +4,7 @@ go 1.22
 
 require (
 	github.com/spf13/cobra v1.10.2
-	github.com/wow-look-at-my/go-selfupdate-mini v0.0.0-20260428162242-77b07fecaedf
+	github.com/wow-look-at-my/go-selfupdate-mini v0.0.0-20260429053956-798c35ad3567
 	github.com/wow-look-at-my/testify v0.0.0-20260217010200-5fd2c08e3abb
 )
 

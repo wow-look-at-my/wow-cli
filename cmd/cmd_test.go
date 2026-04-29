@@ -555,12 +555,12 @@ func TestUpdate_SelfUpdateNewVersion(t *testing.T) {
 	withTempState(t)
 	withMockUpdater(t, "wow-cli", "v2.0.0")
 
-	// Write a temp file to stand in for the wow executable.
+	// Write a temp file to stand in for the wow executable; UpdateCommand
+	// stats cmdPath before installing.
 	tmp := t.TempDir()
 	exePath := filepath.Join(tmp, "wow")
 	os.WriteFile(exePath, []byte("#!/bin/sh\necho old\n"), 0o755)
 
-	// Point selfUpdateWow at the temp file instead of the real binary.
 	oldExe := wowExePathOverride
 	wowExePathOverride = exePath
 	t.Cleanup(func() { wowExePathOverride = oldExe })
@@ -572,16 +572,18 @@ func TestUpdate_SelfUpdateNewVersion(t *testing.T) {
 	out, err := execute(t, "update")
 	require.Nil(t, err)
 
-	assert.Contains(t, out, "Updating wow")
+	assert.Contains(t, out, "Updated wow")
 	assert.Contains(t, out, "v1.0.0")
 	assert.Contains(t, out, "v2.0.0")
-	assert.Contains(t, out, "Updated wow")
 }
 
 func TestUpdate_SelfUpdateUsesRealExePath(t *testing.T) {
 	withTempState(t)
 
-	// Mock that detects a newer version but errors on install (safe: no file write).
+	// Mock that detects a newer version but errors on install. With no
+	// wowExePathOverride, selfUpdateWow resolves os.Executable() (the test
+	// binary), UpdateCommand stats it (it exists), and the Install error then
+	// propagates back through UpdateTo.
 	asset := assetForPlatform("wow-cli")
 	cfg := selfupdate.Config{
 		Source: &mockSource{
@@ -599,20 +601,19 @@ func TestUpdate_SelfUpdateUsesRealExePath(t *testing.T) {
 	old := selfupdate.EmbeddedVersion
 	selfupdate.EmbeddedVersion = "v1.0.0"
 	t.Cleanup(func() { selfupdate.EmbeddedVersion = old })
-	// wowExePathOverride intentionally not set — exercises os.Executable() path.
 
 	out, err := execute(t, "update")
 	require.NotNil(t, err)
-	assert.Contains(t, out, "Updating wow")
+	assert.Contains(t, out, "Checking latest release")
 }
 
-func TestUpdate_SelfUpdateDetectError(t *testing.T) {
+func TestUpdate_SelfUpdate_NoReleasesIsBenign(t *testing.T) {
 	withTempState(t)
 
-	// Source with no releases produces a "no release found" error from detectLatest.
-	cfg := selfupdate.Config{
-		Source: &mockSource{releases: nil},
-	}
+	// Source with zero releases. UpdateCommand returns the current version as
+	// the "latest" without calling Install, so selfUpdateWow prints
+	// "already up to date" instead of erroring.
+	cfg := selfupdate.Config{Source: &mockSource{releases: nil}}
 	testUpdaterConfig = &cfg
 	t.Cleanup(func() { testUpdaterConfig = nil })
 
@@ -620,9 +621,26 @@ func TestUpdate_SelfUpdateDetectError(t *testing.T) {
 	selfupdate.EmbeddedVersion = "v1.0.0"
 	t.Cleanup(func() { selfupdate.EmbeddedVersion = old })
 
-	_, err := execute(t, "update")
-	require.NotNil(t, err)
-	assert.Contains(t, err.Error(), "no release found")
+	out, err := execute(t, "update")
+	require.Nil(t, err)
+	assert.Contains(t, out, "already up to date")
+}
+
+func TestUpdate_SelfUpdate_SkipsDirty(t *testing.T) {
+	withTempState(t)
+
+	// Dirty (or "(devel)") versions must short-circuit before any release
+	// lookup: if selfUpdateWow proceeded, it would print "Checking latest
+	// release for wow-look-at-my/wow-cli..." and we'd see it in stdout.
+	withMockUpdater(t, "wow-cli", "v9.9.9")
+
+	old := selfupdate.EmbeddedVersion
+	selfupdate.EmbeddedVersion = "v1.0.0+dirty"
+	t.Cleanup(func() { selfupdate.EmbeddedVersion = old })
+
+	out, err := execute(t, "update")
+	require.Nil(t, err)
+	assert.NotContains(t, out, "Checking latest release")
 }
 
 func TestInstall_WithVersion(t *testing.T) {

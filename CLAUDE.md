@@ -24,9 +24,8 @@ cmd/
   list.go        # wow list
   which.go       # wow which
   search.go      # wow search
-  version.go     # selfupdate.EmbeddedVersion = autoreleaseVersion(); selfupdate.RegisterCommands(...)
-  cmd_test.go    # most command tests (mock selfupdate source)
-  version_test.go # version helper + shouldSelfUpdateWow tests
+  version.go     # selfupdate.RegisterCommands(rootCmd, slug) + dedupe library install/update
+  cmd_test.go    # all command tests (mock selfupdate source)
 store/
   store.go       # JSON state at ~/.local/share/wow/packages.json
   store_test.go  # store CRUD and persistence tests
@@ -48,15 +47,13 @@ Each command file registers itself via `init()` — do not add registration call
 
 State directory resolution order: `$WOW_STATE_DIR` → `$XDG_DATA_HOME/wow` → `~/.local/share/wow`.
 
-## Build version detection
+## Build version detection and self-update
 
-`cmd/version.go`'s `init()` sets `selfupdate.EmbeddedVersion` from `autoreleaseVersion()`, which reads the binary's embedded VCS info (`runtime/debug.ReadBuildInfo`) and formats `vcs.time` as `v0.0.<unix-seconds>` to match the autorelease tag scheme. Dirty trees (`vcs.modified=true`) get `+dirty` appended; non-VCS builds leave it empty so `selfupdate.CurrentVersion()` falls through to its short-revision/`(devel)` fallback.
+`cmd/version.go`'s `init()` calls `selfupdate.RegisterCommands(rootCmd, slug)` and then drops the library's `install` and `update` commands (we have package-aware versions of both). The library's `version` command stays and serves `wow version` and `wow --version`.
 
-We populate `EmbeddedVersion` (rather than relying on the library's auto-detection alone) because go-selfupdate-mini's auto-detection produces a 12-char SHA — useful for display but never equal to autorelease tags like `v0.0.1777283542`, which would break wow's self-update equality check. We also do **not** rely on `-ldflags -X` injection: go-toolchain hardcodes its ldflags prefix to its own import path (`github.com/wow-look-at-my/go-toolchain/src/cmd.buildVersion`), so any `-X` it emits silently no-ops against any other module's variable. `runtime/debug.ReadBuildInfo()` sidesteps that entirely.
+go-selfupdate-mini detects the running binary's version itself: `selfupdate.CurrentVersion()` reads `runtime/debug.ReadBuildInfo()` and, when `Main.Version` is missing/`(devel)`, formats `vcs.time` as `v0.0.<unix-seconds>` (matching the autorelease tag scheme), with `+dirty` appended for modified working trees. We do not need to populate `EmbeddedVersion` ourselves; the library's autorelease branch produces the right format directly from VCS info.
 
-After setting `EmbeddedVersion`, `init()` calls `selfupdate.RegisterCommands(rootCmd, slug)`. That registers the library's `version`, `install`, and `update` commands and sets `rootCmd.Version`. The library's `install` and `update` are dropped from `rootCmd` immediately because we have package-aware versions of those; the library's `version` is what serves `wow version` and `wow --version`.
-
-`shouldSelfUpdateWow(v string) bool` in `cmd/update.go` gates the self-update step on a real autorelease tag — it skips empty, `(devel)`, and any `+dirty`-suffixed string so dev builds are never silently overwritten.
+`cmd/update.go`'s `selfUpdateWow` short-circuits on empty / `(devel)` / `+dirty` versions so dev builds are never silently overwritten. The actual self-update goes through `up.UpdateCommand(ctx, exePath, current, slug)` so tests can inject `wowExePathOverride` instead of letting the library resolve `os.Executable()` to the test binary.
 
 ## Testing
 
