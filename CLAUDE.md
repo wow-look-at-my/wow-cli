@@ -104,4 +104,8 @@ Cobra binds flags to package-level vars; tests that set flags must restore them 
 
 ## CI
 
-`ci.yml` is a single workflow with two jobs. The `test` job runs on every push, uses `wow-look-at-my/go-toolchain@v1` with `autorelease: true`, and uploads the cross-platform binaries as the `go-build` artifact. The `pages` job runs only on master, depends on `test` (so a CI failure blocks the deploy), downloads the `go-build` artifact, runs `./build/wow-cli_linux_amd64 build-manifest --output pages/manifest.json.age`, and deploys `pages/` to GitHub Pages. Concurrency on `pages` collapses overlapping deploys. Permissions required at workflow level: `id-token: write`, `contents: write` (for autorelease), `pages: write`. The installer script is served at `https://wow-look-at-my.github.io/wow-cli/install.sh`; the encrypted manifest is at `https://wow-look-at-my.github.io/wow-cli/manifest.json.age` once `recipients.jsonc` has at least one entry.
+`ci.yml` has two jobs. `ci` runs on every push: build, test, autorelease via `go-toolchain@v1`. `pages` runs only on master after `ci`, calling the reusable `deploy-manifest.yml` workflow with `deploy-pages: true`.
+
+`deploy-manifest.yml` is a reusable workflow (`workflow_call`) designed for any repo that needs an encrypted manifest. Inputs: `org` (required), `deploy-pages` (boolean, default false). It downloads the latest wow binary via `download-release-binary`, runs `build-manifest --org <org> --skip-if-empty`, uploads the manifest as a GHA artifact, and optionally deploys `pages/` to GitHub Pages. The calling repo must have a `pages/` directory and a `recipients.jsonc`.
+
+The installer script is served at `https://wow-look-at-my.github.io/wow-cli/install.sh`; the encrypted manifest is at `https://wow-look-at-my.github.io/wow-cli/manifest.json.age` once `recipients.jsonc` has at least one entry.

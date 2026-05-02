@@ -59,6 +59,7 @@ func resetBuildManifestFlags(t *testing.T) {
 	t.Helper()
 	t.Cleanup(func() {
 		buildManifestOrg = "wow-look-at-my"
+		buildManifestInclude = nil
 		buildManifestRecipients = nil
 		buildManifestRecipientsFile = "recipients.jsonc"
 		buildManifestOutput = "-"
@@ -280,6 +281,47 @@ func TestBuildManifest_FileWithBadKeyErrors(t *testing.T) {
 
 	_, err := execute(t, "build-manifest", "--recipients-file", recFile, "--output", filepath.Join(tmp, "m.age"))
 	require.NotNil(t, err)
+}
+
+func TestBuildManifest_IncludeFilter(t *testing.T) {
+	withTempState(t)
+	resetBuildManifestFlags(t)
+	withMockGitHub(t,
+		[]map[string]any{
+			{"full_name": "wow-look-at-my/atool", "description": "tool A"},
+			{"full_name": "wow-look-at-my/btool", "description": "tool B"},
+			{"full_name": "wow-look-at-my/other", "description": "other"},
+		},
+		map[string][]map[string]any{
+			"wow-look-at-my/atool": {{
+				"tag_name": "v1.0.0",
+				"assets":   []map[string]any{{"name": "atool_linux_amd64", "browser_download_url": "http://a"}},
+			}},
+			"wow-look-at-my/btool": {{
+				"tag_name": "v2.0.0",
+				"assets":   []map[string]any{{"name": "btool_linux_amd64", "browser_download_url": "http://b"}},
+			}},
+			"wow-look-at-my/other": {{
+				"tag_name": "v3.0.0",
+				"assets":   []map[string]any{{"name": "other_linux_amd64", "browser_download_url": "http://o"}},
+			}},
+		},
+	)
+
+	tmp := t.TempDir()
+	out := filepath.Join(tmp, "manifest.json")
+	_, err := execute(t, "build-manifest", "--plain", "--recipients-file", "", "--output", out, "--include", "*tool")
+	require.Nil(t, err)
+
+	data, err := os.ReadFile(out)
+	require.Nil(t, err)
+
+	var m manifest.Manifest
+	require.NoError(t, json.Unmarshal(data, &m))
+	assert.Equal(t, 2, len(m.Packages))
+	assert.Contains(t, m.Packages, "wow-look-at-my/atool")
+	assert.Contains(t, m.Packages, "wow-look-at-my/btool")
+	assert.NotContains(t, m.Packages, "wow-look-at-my/other")
 }
 
 func TestBuildManifest_SkipsDraftAndPrerelease(t *testing.T) {

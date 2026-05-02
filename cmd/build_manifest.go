@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/wow-look-at-my/wow-cli/manifest"
@@ -14,6 +16,7 @@ import (
 
 var (
 	buildManifestOrg            string
+	buildManifestInclude        []string
 	buildManifestRecipients     []string
 	buildManifestRecipientsFile string
 	buildManifestOutput         string
@@ -40,6 +43,7 @@ output is then plain JSON.`,
 
 func init() {
 	buildManifestCmd.Flags().StringVar(&buildManifestOrg, "org", "wow-look-at-my", "GitHub org to enumerate")
+	buildManifestCmd.Flags().StringArrayVar(&buildManifestInclude, "include", nil, "glob pattern for repo names to include (repeatable; if omitted, all repos)")
 	buildManifestCmd.Flags().StringArrayVar(&buildManifestRecipients, "recipient", nil, "age recipient public key (repeatable, merged with --recipients-file)")
 	buildManifestCmd.Flags().StringVar(&buildManifestRecipientsFile, "recipients-file", "recipients.jsonc", "path to recipients JSONC file (skip with empty string)")
 	buildManifestCmd.Flags().StringVar(&buildManifestOutput, "output", "-", "output file (\"-\" for stdout)")
@@ -69,6 +73,9 @@ func runBuildManifest(cmd *cobra.Command, _ []string) error {
 	repos, err := enumerateOrgRepos(ctx, buildManifestOrg)
 	if err != nil {
 		return fmt.Errorf("enumerate org: %w", err)
+	}
+	if len(buildManifestInclude) > 0 {
+		repos = filterRepos(repos, buildManifestInclude)
 	}
 
 	m := manifest.New()
@@ -225,3 +232,20 @@ type ghSearchItem struct {
 }
 
 func urlQueryEscape(s string) string { return url.QueryEscape(s) }
+
+func filterRepos(repos []ghSearchItem, patterns []string) []ghSearchItem {
+	var out []ghSearchItem
+	for _, r := range repos {
+		name := r.FullName
+		if i := strings.LastIndex(name, "/"); i >= 0 {
+			name = name[i+1:]
+		}
+		for _, p := range patterns {
+			if matched, _ := filepath.Match(p, name); matched {
+				out = append(out, r)
+				break
+			}
+		}
+	}
+	return out
+}

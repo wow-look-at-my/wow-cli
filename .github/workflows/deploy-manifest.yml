@@ -6,6 +6,11 @@ on:
       org:
         required: true
         type: string
+      include:
+        description: 'Space-separated glob patterns for repo names to include (omit for all)'
+        required: false
+        type: string
+        default: ''
       deploy-pages:
         required: false
         type: boolean
@@ -37,7 +42,14 @@ jobs:
           token: ${{ github.token }}
 
       - name: Build encrypted manifest
-        run: ${{ steps.wow.outputs.path }} build-manifest --org ${{ inputs.org }} --output pages/manifest.json.age --skip-if-empty
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          args=(build-manifest --org "${{ inputs.org }}" --output pages/manifest.json.age --skip-if-empty)
+          for pattern in ${{ inputs.include }}; do
+            args+=(--include "$pattern")
+          done
+          ${{ steps.wow.outputs.path }} "${args[@]}"
 
       - uses: actions/upload-artifact@v4
         with:
