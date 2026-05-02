@@ -46,7 +46,7 @@ Flags:
 - `--path <path>` — override the install path (default: `~/.local/bin/<name>`)
 - `--version <tag>` — install a specific release tag (default: latest)
 
-When sources are configured (see below), `install` checks them first and falls back to the GitHub API only when no source has the package.
+When repos are configured (see below), `install` checks them first and falls back to the GitHub API only when no repo has the package.
 
 #### `update`
 
@@ -90,13 +90,13 @@ wow version --bare
 wow --version
 ```
 
-### Encrypted manifest sources
+### Encrypted manifest repos
 
 `wow` can install packages from an encrypted manifest hosted at any URL, with no GitHub API access required at install time. The manifest is JSON encrypted with [age](https://age-encryption.org), distributed along with a key that decrypts it.
 
 #### `add-src <url> <key>`
 
-Register an encrypted-manifest source. `key` is the age identity (private key, `AGE-SECRET-KEY-...`) that decrypts the manifest at `url`. The source is fetched and decrypted immediately to verify the key is valid.
+Register an encrypted-manifest repo. `key` is the age identity (private key, `AGE-SECRET-KEY-...`) that decrypts the manifest at `url`. The repo is fetched and decrypted immediately to verify the key is valid.
 
 ```sh
 wow add-src https://wow-look-at-my.github.io/wow-cli/manifest.json.age AGE-SECRET-KEY-...
@@ -104,7 +104,7 @@ wow add-src https://wow-look-at-my.github.io/wow-cli/manifest.json.age AGE-SECRE
 
 #### `remove-src <url>`
 
-Remove a configured source.
+Remove a configured repo.
 
 ```sh
 wow remove-src https://wow-look-at-my.github.io/wow-cli/manifest.json.age
@@ -112,7 +112,7 @@ wow remove-src https://wow-look-at-my.github.io/wow-cli/manifest.json.age
 
 #### `list-src`
 
-List configured sources. The decryption key is shown truncated.
+List configured repos. The decryption key is shown truncated.
 
 ```sh
 wow list-src
@@ -161,7 +161,7 @@ Accepted shapes: the object form above, a bare array of objects, or a bare array
 
 A JSON Schema (`recipients.schema.json`) ships in the repo root for editor validation. Reference it with `"$schema": "./recipients.schema.json"` at the top of your file (the loader ignores the key).
 
-### Setting up a private package source
+### Setting up a private package repo
 
 1. For each user who should be able to install from the manifest, run `wow keygen` once. Each invocation prints a unique recipient/identity pair.
 2. PR each user's recipient (`age1...`) into `recipients.jsonc` with a name and optional note. The included [pages workflow](.github/workflows/pages.yml) encrypts the manifest to everyone in that file and publishes `manifest.json.age` to GitHub Pages on every push to master.
@@ -179,7 +179,7 @@ Package state is stored as JSON at:
 2. `$XDG_DATA_HOME/wow/packages.json`
 3. `~/.local/share/wow/packages.json` (default)
 
-Source state lives next to it as `sources.json` (file mode 0600 since it holds decryption keys).
+Repo state (configured manifest endpoints) lives next to it as `repos.json` (file mode 0600 since it holds decryption keys).
 
 ## Compatibility
 

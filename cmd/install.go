@@ -56,13 +56,13 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// First look in configured sources. A hit avoids the GitHub API entirely.
-	hit, err := findInSources(context.Background(), slug, name, installVersion)
+	// First look in configured repos. A hit avoids the GitHub API entirely.
+	hit, err := findInRepos(context.Background(), slug, name, installVersion)
 	if err != nil {
 		return err
 	}
 	if hit != nil {
-		fmt.Fprintf(cmd.OutOrStdout(), "Installing %s %s from source %s...\n", name, hit.Tag, hit.Source.URL)
+		fmt.Fprintf(cmd.OutOrStdout(), "Installing %s %s from repo %s...\n", name, hit.Tag, hit.Repo.URL)
 		if err := installFromAsset(cmd, hit.Asset, dest); err != nil {
 			return err
 		}
@@ -72,7 +72,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	return installFromGitHub(cmd, args[0], slug, name, dest)
 }
 
-// installFromGitHub is the original GitHub-API code path for when no source
+// installFromGitHub is the original GitHub-API code path for when no repo
 // matches.
 func installFromGitHub(cmd *cobra.Command, input, slug, name, dest string) error {
 	up, err := newUpdater()

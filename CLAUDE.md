@@ -30,12 +30,12 @@ Each command file registers itself via `init()` — do not add registration call
 
 **`store.Store`** — the registry, backed by `packages.json`. Lookup works by either slug or binary name.
 
-**`store.Source`** — one configured manifest URL + decryption identity:
+**`store.Repo`** — one configured manifest URL + decryption identity:
 - `URL` — encrypted-manifest endpoint
 - `Identity` — age X25519 private key (`AGE-SECRET-KEY-...`); kept out of `String()` output
 - `AddedAt` — timestamp
 
-**`store.SourceStore`** — the registry of sources, backed by `sources.json` (mode 0600).
+**`store.RepoList`** — the registry of repos, backed by `repos.json` (mode 0600).
 
 **`manifest.Manifest`** — the decrypted catalog: schema version, generated-at, and `Packages map[slug]*Package`. Each Package has `Latest`, `Description`, and `Releases` (each release has a `Tag` and a list of `Asset{Name, URL, Size, SHA256}`).
 
@@ -43,15 +43,15 @@ State directory resolution order: `$WOW_STATE_DIR` → `$XDG_DATA_HOME/wow` → 
 
 ## Install / update flow
 
-`runInstall` and `updateOne` first call `sourceCache.find(ctx, slug, binary, tag)`. The cache:
+`runInstall` and `updateOne` first call `repoCache.find(ctx, slug, binary, tag)`. The cache:
 
-1. Loads `sources.json` (once per command run).
-2. For each configured source, fetches & decrypts the manifest (memoized by URL).
-3. Returns the first source that has the slug AND a matching platform-specific asset (`<binary>_<os>_<arch>[.exe]`). Sources that don't match are skipped silently.
+1. Loads `repos.json` (once per command run).
+2. For each configured repo, fetches & decrypts the manifest (memoized by URL).
+3. Returns the first repo that has the slug AND a matching platform-specific asset (`<binary>_<os>_<arch>[.exe]`). Repos that don't match are skipped silently.
 
-If the cache returns nil (no source matched), the existing GitHub-API path runs (`detectLatest` / `DetectVersion` via go-selfupdate-mini).
+If the cache returns nil (no repo matched), the existing GitHub-API path runs (`detectLatest` / `DetectVersion` via go-selfupdate-mini).
 
-`update` reuses one `sourceCache` across all installed packages so the same
+`update` reuses one `repoCache` across all installed packages so the same
 manifest URL isn't re-fetched per package.
 
 ## Encrypted manifest format

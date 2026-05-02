@@ -9,7 +9,7 @@ import (
 
 var removeSrcCmd = &cobra.Command{
 	Use:   "remove-src <url>",
-	Short: "Remove a configured manifest source",
+	Short: "Remove a configured manifest repo",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runRemoveSrc,
 }
@@ -20,7 +20,7 @@ func init() {
 
 func runRemoveSrc(cmd *cobra.Command, args []string) error {
 	url := args[0]
-	s, err := store.LoadSources()
+	s, err := store.LoadRepoList()
 	if err != nil {
 		return err
 	}
@@ -31,6 +31,6 @@ func runRemoveSrc(cmd *cobra.Command, args []string) error {
 	if err := s.Save(); err != nil {
 		return err
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Removed source %s\n", url)
+	fmt.Fprintf(cmd.OutOrStdout(), "Removed repo %s\n", url)
 	return nil
 }

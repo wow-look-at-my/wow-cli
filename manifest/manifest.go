@@ -4,7 +4,7 @@
 // asset URLs. It is encrypted with age (X25519) before being published so that
 // only holders of the matching age identity can read it. The publisher (CI)
 // holds the recipient public key; clients hold the identity private key, which
-// they pass to `wow add-src` and which gets stored in sources.json.
+// they pass to `wow add-src` and which gets stored in repos.json.
 package manifest
 
 import (

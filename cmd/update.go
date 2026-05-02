@@ -37,9 +37,9 @@ func runUpdate(cmd *cobra.Command, _ []string) error {
 	if len(targets) == 0 {
 		fmt.Fprintln(cmd.OutOrStdout(), "No packages installed.")
 	} else {
-		// Cache source manifests for the whole update pass to avoid refetching
-		// the same source URL for every installed package.
-		cache := newSourceCache()
+		// Cache repo manifests for the whole update pass to avoid refetching
+		// the same repo URL for every installed package.
+		cache := newRepoCache()
 		for _, pkg := range targets {
 			if err := updateOne(cmd, s, pkg, cache); err != nil {
 				return err
@@ -50,7 +50,7 @@ func runUpdate(cmd *cobra.Command, _ []string) error {
 	return selfUpdateWow(cmd)
 }
 
-func updateOne(cmd *cobra.Command, s *store.Store, pkg *store.Package, cache *sourceCache) error {
+func updateOne(cmd *cobra.Command, s *store.Store, pkg *store.Package, cache *repoCache) error {
 	hit, err := cache.find(context.Background(), pkg.Slug, pkg.Name, "")
 	if err != nil {
 		return err
@@ -60,7 +60,7 @@ func updateOne(cmd *cobra.Command, s *store.Store, pkg *store.Package, cache *so
 			fmt.Fprintf(cmd.OutOrStdout(), "%s is already up to date (%s)\n", pkg.Name, pkg.Version)
 			return nil
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "Updating %s %s -> %s from source %s...\n", pkg.Name, pkg.Version, hit.Tag, hit.Source.URL)
+		fmt.Fprintf(cmd.OutOrStdout(), "Updating %s %s -> %s from repo %s...\n", pkg.Name, pkg.Version, hit.Tag, hit.Repo.URL)
 		if err := installFromAsset(cmd, hit.Asset, pkg.Path); err != nil {
 			return err
 		}

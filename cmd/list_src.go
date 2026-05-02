@@ -9,20 +9,20 @@ import (
 
 var listSrcCmd = &cobra.Command{
 	Use:   "list-src",
-	Short: "List configured manifest sources",
+	Short: "List configured manifest repos",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		s, err := store.LoadSources()
+		s, err := store.LoadRepoList()
 		if err != nil {
 			return err
 		}
 		all := s.All()
 		if len(all) == 0 {
-			fmt.Fprintln(cmd.OutOrStdout(), "No sources configured.")
+			fmt.Fprintln(cmd.OutOrStdout(), "No repos configured.")
 			return nil
 		}
-		for _, src := range all {
-			fmt.Fprintln(cmd.OutOrStdout(), src.String())
+		for _, r := range all {
+			fmt.Fprintln(cmd.OutOrStdout(), r.String())
 		}
 		return nil
 	},

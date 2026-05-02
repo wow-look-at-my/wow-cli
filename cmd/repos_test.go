@@ -64,9 +64,9 @@ func TestAddSrc_AddsAndPersists(t *testing.T) {
 
 	out, err := execute(t, "add-src", url, identity)
 	require.Nil(t, err)
-	assert.Contains(t, out, "Added source")
+	assert.Contains(t, out, "Added repo")
 
-	s, _ := store.LoadSources()
+	s, _ := store.LoadRepoList()
 	require.Equal(t, 1, len(s.All()))
 	assert.Equal(t, identity, s.All()[0].Identity)
 }
@@ -81,8 +81,8 @@ func TestAddSrc_RejectsBadKey(t *testing.T) {
 	_, err := execute(t, "add-src", url, otherIdentity)
 	assert.NotNil(t, err)
 
-	// Source should NOT have been saved when verification fails.
-	s, _ := store.LoadSources()
+	// Repo should NOT have been saved when verification fails.
+	s, _ := store.LoadRepoList()
 	assert.Equal(t, 0, len(s.All()))
 }
 
@@ -97,13 +97,13 @@ func TestListSrc_Empty(t *testing.T) {
 	withTempState(t)
 	out, err := execute(t, "list-src")
 	require.Nil(t, err)
-	assert.Contains(t, out, "No sources configured")
+	assert.Contains(t, out, "No repos configured")
 }
 
 func TestListSrc_PrintsTruncatedKey(t *testing.T) {
 	withTempState(t)
-	s, _ := store.LoadSources()
-	s.Add(&store.Source{URL: "https://example/manifest.age", Identity: "AGE-SECRET-KEY-VERYLONGSECRETSTRINGTHATSHOULDBETRUNCATED"})
+	s, _ := store.LoadRepoList()
+	s.Add(&store.Repo{URL: "https://example/manifest.age", Identity: "AGE-SECRET-KEY-VERYLONGSECRETSTRINGTHATSHOULDBETRUNCATED"})
 	require.NoError(t, s.Save())
 
 	out, err := execute(t, "list-src")
@@ -115,16 +115,16 @@ func TestListSrc_PrintsTruncatedKey(t *testing.T) {
 
 func TestRemoveSrc_Removes(t *testing.T) {
 	withTempState(t)
-	s, _ := store.LoadSources()
-	s.Add(&store.Source{URL: "https://a", Identity: "AGE-SECRET-KEY-1"})
-	s.Add(&store.Source{URL: "https://b", Identity: "AGE-SECRET-KEY-2"})
+	s, _ := store.LoadRepoList()
+	s.Add(&store.Repo{URL: "https://a", Identity: "AGE-SECRET-KEY-1"})
+	s.Add(&store.Repo{URL: "https://b", Identity: "AGE-SECRET-KEY-2"})
 	require.NoError(t, s.Save())
 
 	out, err := execute(t, "remove-src", "https://a")
 	require.Nil(t, err)
-	assert.Contains(t, out, "Removed source")
+	assert.Contains(t, out, "Removed repo")
 
-	s2, _ := store.LoadSources()
+	s2, _ := store.LoadRepoList()
 	assert.Equal(t, 1, len(s2.All()))
 	assert.Equal(t, "https://b", s2.All()[0].URL)
 }
@@ -135,9 +135,9 @@ func TestRemoveSrc_NotConfigured(t *testing.T) {
 	assert.NotNil(t, err)
 }
 
-// ---- install via source --------------------------------------------------
+// ---- install via repo ----------------------------------------------------
 
-func TestInstall_FromSource_DownloadsFromManifestURL(t *testing.T) {
+func TestInstall_FromRepo_DownloadsFromManifestURL(t *testing.T) {
 	withTempState(t)
 
 	recipient, identity := newTestKeyPair(t)
@@ -145,8 +145,8 @@ func TestInstall_FromSource_DownloadsFromManifestURL(t *testing.T) {
 
 	m := manifest.New()
 	m.Packages["owner/mytool"] = &manifest.Package{
-		Slug:	"owner/mytool",
-		Latest:	"v3.2.1",
+		Slug:   "owner/mytool",
+		Latest: "v3.2.1",
 		Releases: []*manifest.Release{
 			{Tag: "v3.2.1", Assets: []*manifest.Asset{
 				{Name: platformAsset("mytool"), URL: binSrv},
@@ -155,16 +155,16 @@ func TestInstall_FromSource_DownloadsFromManifestURL(t *testing.T) {
 	}
 	manifestURL := startManifestServer(t, m, recipient)
 
-	src, _ := store.LoadSources()
-	src.Add(&store.Source{URL: manifestURL, Identity: identity})
-	require.NoError(t, src.Save())
+	repos, _ := store.LoadRepoList()
+	repos.Add(&store.Repo{URL: manifestURL, Identity: identity})
+	require.NoError(t, repos.Save())
 
 	tmp := t.TempDir()
 	dest := filepath.Join(tmp, "mytool")
 
 	out, err := execute(t, "install", "owner/mytool", "--path", dest)
 	require.Nil(t, err)
-	assert.Contains(t, out, "from source")
+	assert.Contains(t, out, "from repo")
 	assert.Contains(t, out, "v3.2.1")
 
 	// Recorded in store with the manifest's tag, no GitHub API hit needed.
@@ -174,7 +174,7 @@ func TestInstall_FromSource_DownloadsFromManifestURL(t *testing.T) {
 	assert.Equal(t, "v3.2.1", pkg.Version)
 }
 
-func TestInstall_NoMatchInSource_FallsBackToGitHub(t *testing.T) {
+func TestInstall_NoMatchInRepo_FallsBackToGitHub(t *testing.T) {
 	withTempState(t)
 
 	recipient, identity := newTestKeyPair(t)
@@ -182,9 +182,9 @@ func TestInstall_NoMatchInSource_FallsBackToGitHub(t *testing.T) {
 	// GitHub source.
 	manifestURL := startManifestServer(t, manifest.New(), recipient)
 
-	src, _ := store.LoadSources()
-	src.Add(&store.Source{URL: manifestURL, Identity: identity})
-	require.NoError(t, src.Save())
+	repos, _ := store.LoadRepoList()
+	repos.Add(&store.Repo{URL: manifestURL, Identity: identity})
+	require.NoError(t, repos.Save())
 
 	withMockUpdater(t, "mytool", "v0.0.1")
 
@@ -197,9 +197,9 @@ func TestInstall_NoMatchInSource_FallsBackToGitHub(t *testing.T) {
 	assert.Contains(t, out, "Installed")
 }
 
-// ---- update via source ---------------------------------------------------
+// ---- update via repo -----------------------------------------------------
 
-func TestUpdate_FromSource_PicksUpNewVersion(t *testing.T) {
+func TestUpdate_FromRepo_PicksUpNewVersion(t *testing.T) {
 	withTempState(t)
 
 	recipient, identity := newTestKeyPair(t)
@@ -207,8 +207,8 @@ func TestUpdate_FromSource_PicksUpNewVersion(t *testing.T) {
 
 	m := manifest.New()
 	m.Packages["owner/mytool"] = &manifest.Package{
-		Slug:	"owner/mytool",
-		Latest:	"v2.0.0",
+		Slug:   "owner/mytool",
+		Latest: "v2.0.0",
 		Releases: []*manifest.Release{
 			{Tag: "v2.0.0", Assets: []*manifest.Asset{
 				{Name: platformAsset("mytool"), URL: binSrv},
@@ -217,9 +217,9 @@ func TestUpdate_FromSource_PicksUpNewVersion(t *testing.T) {
 	}
 	manifestURL := startManifestServer(t, m, recipient)
 
-	src, _ := store.LoadSources()
-	src.Add(&store.Source{URL: manifestURL, Identity: identity})
-	require.NoError(t, src.Save())
+	repos, _ := store.LoadRepoList()
+	repos.Add(&store.Repo{URL: manifestURL, Identity: identity})
+	require.NoError(t, repos.Save())
 
 	// Pre-existing installed package at v1.0.0 — wow update should bump it.
 	tmp := t.TempDir()
@@ -232,10 +232,10 @@ func TestUpdate_FromSource_PicksUpNewVersion(t *testing.T) {
 	require.Nil(t, err)
 	assert.Contains(t, out, "Updated mytool")
 	assert.Contains(t, out, "v2.0.0")
-	assert.True(t, strings.Contains(out, "from source"))
+	assert.True(t, strings.Contains(out, "from repo"))
 }
 
-func TestUpdate_FromSource_AlreadyLatest(t *testing.T) {
+func TestUpdate_FromRepo_AlreadyLatest(t *testing.T) {
 	withTempState(t)
 
 	recipient, identity := newTestKeyPair(t)
@@ -243,8 +243,8 @@ func TestUpdate_FromSource_AlreadyLatest(t *testing.T) {
 
 	m := manifest.New()
 	m.Packages["owner/mytool"] = &manifest.Package{
-		Slug:	"owner/mytool",
-		Latest:	"v1.0.0",
+		Slug:   "owner/mytool",
+		Latest: "v1.0.0",
 		Releases: []*manifest.Release{
 			{Tag: "v1.0.0", Assets: []*manifest.Asset{
 				{Name: platformAsset("mytool"), URL: binSrv},
@@ -253,9 +253,9 @@ func TestUpdate_FromSource_AlreadyLatest(t *testing.T) {
 	}
 	manifestURL := startManifestServer(t, m, recipient)
 
-	src, _ := store.LoadSources()
-	src.Add(&store.Source{URL: manifestURL, Identity: identity})
-	require.NoError(t, src.Save())
+	repos, _ := store.LoadRepoList()
+	repos.Add(&store.Repo{URL: manifestURL, Identity: identity})
+	require.NoError(t, repos.Save())
 
 	pkgs, _ := store.Load()
 	pkgs.Add(&store.Package{Slug: "owner/mytool", Name: "mytool", Path: "/tmp/mytool", Version: "v1.0.0"})
