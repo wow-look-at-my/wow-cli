@@ -27,13 +27,17 @@ type RecipientsFile struct {
 // (nil, nil) if path doesn't exist so callers can choose whether the
 // absence is fatal.
 //
+// The file is parsed as JSONC: // line comments and /* */ block comments
+// are stripped before JSON unmarshalling. The optional top-level "$schema"
+// key (used by editors for validation) is ignored.
+//
 // Accepted shapes:
 //
 //	{"recipients": [{"name": "alice", "key": "age1..."}, ...]}
 //	[{"name": "alice", "key": "age1..."}, ...]
 //	["age1...", "age1..."]
 func LoadRecipients(path string) ([]Recipient, error) {
-	data, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return nil, nil
 	}
@@ -41,6 +45,7 @@ func LoadRecipients(path string) ([]Recipient, error) {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 
+	data := stripJSONCComments(raw)
 	trimmed := strings.TrimSpace(string(data))
 	if trimmed == "" {
 		return nil, nil
@@ -104,6 +109,60 @@ func firstElementIsObject(s string) bool {
 		}
 	}
 	return false
+}
+
+// stripJSONCComments removes // line comments and /* */ block comments,
+// leaving everything inside double-quoted strings (including escapes)
+// untouched. The result remains positionally aligned where it matters
+// (newlines preserved) so JSON parser error offsets stay sensible.
+func stripJSONCComments(in []byte) []byte {
+	out := make([]byte, 0, len(in))
+	n := len(in)
+	for i := 0; i < n; {
+		if in[i] == '"' {
+			// Copy the entire string literal verbatim.
+			out = append(out, in[i])
+			i++
+			for i < n {
+				if in[i] == '\\' && i+1 < n {
+					out = append(out, in[i], in[i+1])
+					i += 2
+					continue
+				}
+				out = append(out, in[i])
+				if in[i] == '"' {
+					i++
+					break
+				}
+				i++
+			}
+			continue
+		}
+		if i+1 < n && in[i] == '/' && in[i+1] == '/' {
+			i += 2
+			for i < n && in[i] != '\n' {
+				i++
+			}
+			continue
+		}
+		if i+1 < n && in[i] == '/' && in[i+1] == '*' {
+			i += 2
+			for i+1 < n {
+				if in[i] == '*' && in[i+1] == '/' {
+					i += 2
+					break
+				}
+				if in[i] == '\n' {
+					out = append(out, '\n')
+				}
+				i++
+			}
+			continue
+		}
+		out = append(out, in[i])
+		i++
+	}
+	return out
 }
 
 func validateRecipients(rs []Recipient, path string) ([]Recipient, error) {

@@ -128,7 +128,7 @@ wow keygen
 
 #### `build-manifest`
 
-Walk a GitHub org's repos, gather their releases, and emit an age-encrypted manifest. Used by CI to refresh the published manifest. Recipients come from `recipients.json` (one entry per authorized user) and from any `--recipient` flags; both sources are merged.
+Walk a GitHub org's repos, gather their releases, and emit an age-encrypted manifest. Used by CI to refresh the published manifest. Recipients come from `recipients.jsonc` (one entry per authorized user) and from any `--recipient` flags; both sources are merged.
 
 ```sh
 wow build-manifest --org wow-look-at-my --output manifest.json.age
@@ -136,17 +136,19 @@ wow build-manifest --org wow-look-at-my --output manifest.json.age
 
 Flags:
 - `--org <org>` — GitHub org to enumerate (default: `wow-look-at-my`)
-- `--recipients-file <path>` — JSON file of recipients (default: `recipients.json`; pass `""` to skip)
+- `--recipients-file <path>` — JSON file of recipients (default: `recipients.jsonc`; pass `""` to skip)
 - `--recipient <age1...>` — age recipient public key (repeatable, merged with the file)
 - `--output <file>` — output file (`-` for stdout, default `-`)
 - `--plain` — write plain JSON instead of encrypting (debugging)
 
-### `recipients.json`
+### `recipients.jsonc`
 
-The list of who can decrypt the manifest lives in `recipients.json` at the repo root. It's checked into git so additions and revocations are auditable in the history and reviewable as PRs:
+The list of who can decrypt the manifest lives in `recipients.jsonc` at the repo root. It's checked into git so additions and revocations are auditable in the history and reviewable as PRs. Both `//` and `/* */` comments are supported:
 
-```json
+```jsonc
+// Members of the wow private package source.
 {
+  "$schema": "./recipients.schema.json",
   "recipients": [
     {"name": "alice",  "key": "age1...",  "note": "laptop, added 2026-05-01"},
     {"name": "bob",    "key": "age1..."},
@@ -157,15 +159,17 @@ The list of who can decrypt the manifest lives in `recipients.json` at the repo 
 
 Accepted shapes: the object form above, a bare array of objects, or a bare array of strings. `name` and `note` are optional but recommended — that's the whole reason for keeping the list in git.
 
+A JSON Schema (`recipients.schema.json`) ships in the repo root for editor validation. Reference it with `"$schema": "./recipients.schema.json"` at the top of your file (the loader ignores the key).
+
 ### Setting up a private package source
 
 1. For each user who should be able to install from the manifest, run `wow keygen` once. Each invocation prints a unique recipient/identity pair.
-2. PR each user's recipient (`age1...`) into `recipients.json` with a name and optional note. The included [pages workflow](.github/workflows/pages.yml) encrypts the manifest to everyone in that file and publishes `manifest.json.age` to GitHub Pages on every push to master.
+2. PR each user's recipient (`age1...`) into `recipients.jsonc` with a name and optional note. The included [pages workflow](.github/workflows/pages.yml) encrypts the manifest to everyone in that file and publishes `manifest.json.age` to GitHub Pages on every push to master.
 3. Distribute each identity (`AGE-SECRET-KEY-...`) out-of-band to its corresponding user. They run `wow add-src <pages url>/manifest.json.age <their identity>` to start installing from your manifest without hitting the GitHub API.
 
-To revoke a user, send a PR removing their entry from `recipients.json`. On the next deploy, the new manifest no longer encrypts to their key; their copy of the file becomes useless. Other users' identities keep working.
+To revoke a user, send a PR removing their entry from `recipients.jsonc`. On the next deploy, the new manifest no longer encrypts to their key; their copy of the file becomes useless. Other users' identities keep working.
 
-The published manifest is encrypted before it leaves the runner, so it's safe to host on a public URL — only holders of one of the listed identities can read it. If `recipients.json` is empty, the workflow skips manifest publishing and just deploys the rest of `pages/`.
+The published manifest is encrypted before it leaves the runner, so it's safe to host on a public URL — only holders of one of the listed identities can read it. If `recipients.jsonc` is empty, the workflow skips manifest publishing and just deploys the rest of `pages/`.
 
 ## State
 

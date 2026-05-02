@@ -18,6 +18,7 @@ var (
 	buildManifestRecipientsFile string
 	buildManifestOutput         string
 	buildManifestUnencrypt      bool
+	buildManifestSkipIfEmpty    bool
 )
 
 var buildManifestCmd = &cobra.Command{
@@ -40,9 +41,10 @@ output is then plain JSON.`,
 func init() {
 	buildManifestCmd.Flags().StringVar(&buildManifestOrg, "org", "wow-look-at-my", "GitHub org to enumerate")
 	buildManifestCmd.Flags().StringArrayVar(&buildManifestRecipients, "recipient", nil, "age recipient public key (repeatable, merged with --recipients-file)")
-	buildManifestCmd.Flags().StringVar(&buildManifestRecipientsFile, "recipients-file", "recipients.json", "path to recipients JSON file (skip with empty string)")
+	buildManifestCmd.Flags().StringVar(&buildManifestRecipientsFile, "recipients-file", "recipients.jsonc", "path to recipients JSONC file (skip with empty string)")
 	buildManifestCmd.Flags().StringVar(&buildManifestOutput, "output", "-", "output file (\"-\" for stdout)")
 	buildManifestCmd.Flags().BoolVar(&buildManifestUnencrypt, "plain", false, "write plain JSON instead of encrypting")
+	buildManifestCmd.Flags().BoolVar(&buildManifestSkipIfEmpty, "skip-if-empty", false, "exit 0 without writing output when no recipients are configured")
 	rootCmd.AddCommand(buildManifestCmd)
 }
 
@@ -56,6 +58,10 @@ func runBuildManifest(cmd *cobra.Command, _ []string) error {
 		recipients = append(recipients, manifest.Keys(fileRecipients)...)
 	}
 	if len(recipients) == 0 && !buildManifestUnencrypt {
+		if buildManifestSkipIfEmpty {
+			fmt.Fprintln(cmd.ErrOrStderr(), "no recipients configured; skipping (--skip-if-empty)")
+			return nil
+		}
 		return fmt.Errorf("no recipients (populate %s or pass --recipient, or use --plain)", buildManifestRecipientsFile)
 	}
 

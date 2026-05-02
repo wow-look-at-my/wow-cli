@@ -60,9 +60,10 @@ func resetBuildManifestFlags(t *testing.T) {
 	t.Cleanup(func() {
 		buildManifestOrg = "wow-look-at-my"
 		buildManifestRecipients = nil
-		buildManifestRecipientsFile = "recipients.json"
+		buildManifestRecipientsFile = "recipients.jsonc"
 		buildManifestOutput = "-"
 		buildManifestUnencrypt = false
+		buildManifestSkipIfEmpty = false
 	})
 }
 
@@ -218,6 +219,26 @@ func TestBuildManifest_NoRecipientsErrors(t *testing.T) {
 	_, err := execute(t, "build-manifest", "--recipients-file", "")
 	require.NotNil(t, err)
 	assert.Contains(t, err.Error(), "no recipients")
+}
+
+func TestBuildManifest_SkipIfEmpty(t *testing.T) {
+	withTempState(t)
+	resetBuildManifestFlags(t)
+	withMockGitHub(t, nil, nil)
+
+	tmp := t.TempDir()
+	out := filepath.Join(tmp, "manifest.age")
+	_, err := execute(t, "build-manifest",
+		"--recipients-file", "",
+		"--output", out,
+		"--skip-if-empty",
+	)
+	require.Nil(t, err)
+
+	// Output file must NOT have been created — the workflow then doesn't
+	// publish a manifest at all.
+	_, statErr := os.Stat(out)
+	assert.True(t, os.IsNotExist(statErr))
 }
 
 func TestBuildManifest_MissingFileIsBenign_ButStillNeedsRecipient(t *testing.T) {

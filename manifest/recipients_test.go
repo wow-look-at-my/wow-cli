@@ -94,3 +94,60 @@ func TestLoadRecipients_TrimsWhitespace(t *testing.T) {
 	assert.Equal(t, "age1aaaa", rs[0].Key)
 	assert.Equal(t, "alice", rs[0].Name)
 }
+
+func TestLoadRecipients_StripsLineComments(t *testing.T) {
+	dir := t.TempDir()
+	path := writeFile(t, dir, "recipients.jsonc", `// top-level comment
+{
+  "$schema": "./recipients.schema.json", // editor association
+  // alice gets her own key
+  "recipients": [
+    {"name": "alice", "key": "age1aaaa"} // her laptop
+  ]
+}`)
+	rs, err := LoadRecipients(path)
+	require.Nil(t, err)
+	require.Equal(t, 1, len(rs))
+	assert.Equal(t, "age1aaaa", rs[0].Key)
+}
+
+func TestLoadRecipients_StripsBlockComments(t *testing.T) {
+	dir := t.TempDir()
+	path := writeFile(t, dir, "recipients.jsonc", `{
+  /* multi-line
+     comment */ "recipients": [ /* inline */ {"key": "age1aaaa"} ]
+}`)
+	rs, err := LoadRecipients(path)
+	require.Nil(t, err)
+	require.Equal(t, 1, len(rs))
+	assert.Equal(t, "age1aaaa", rs[0].Key)
+}
+
+func TestLoadRecipients_PreservesCommentsInsideStrings(t *testing.T) {
+	dir := t.TempDir()
+	// The // and /* in the note field are inside a string literal and must
+	// not be treated as comment markers.
+	path := writeFile(t, dir, "recipients.jsonc", `{
+  "recipients": [
+    {"key": "age1aaaa", "note": "see https://example.com/path // not a comment /* nope */"}
+  ]
+}`)
+	rs, err := LoadRecipients(path)
+	require.Nil(t, err)
+	require.Equal(t, 1, len(rs))
+	assert.Contains(t, rs[0].Note, "https://example.com/path // not a comment /* nope */")
+}
+
+func TestLoadRecipients_IgnoresSchemaKey(t *testing.T) {
+	// The optional $schema property used by editors must not break parsing
+	// or appear in the output.
+	dir := t.TempDir()
+	path := writeFile(t, dir, "recipients.jsonc", `{
+  "$schema": "https://example/schema.json",
+  "recipients": [{"key": "age1aaaa"}]
+}`)
+	rs, err := LoadRecipients(path)
+	require.Nil(t, err)
+	require.Equal(t, 1, len(rs))
+	assert.Equal(t, "age1aaaa", rs[0].Key)
+}

@@ -33,16 +33,7 @@ jobs:
       - name: Build encrypted manifest
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          # Skip when recipients.json has no entries — the manifest can't be
-          # encrypted to nobody, but the rest of pages should still deploy.
-          count=$(jq '.recipients | length' recipients.json)
-          if [ "$count" -gt 0 ]; then
-            ./build/wow-cli_linux_amd64 build-manifest --output pages/manifest.json.age
-            echo "Published manifest to $count recipients."
-          else
-            echo "recipients.json has 0 entries — skipping manifest publish."
-          fi
+        run: ./build/wow-cli_linux_amd64 build-manifest --output pages/manifest.json.age
 
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v3
