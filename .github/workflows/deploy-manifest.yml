@@ -12,9 +12,10 @@ on:
         type: string
         default: ''
       deploy-pages:
+        description: '"true", "false", or "auto" (deploy on master/main only)'
         required: false
-        type: boolean
-        default: false
+        type: string
+        default: 'auto'
 
 permissions:
   pages: write
@@ -27,7 +28,9 @@ jobs:
     concurrency:
       group: pages
       cancel-in-progress: true
-    environment: ${{ inputs.deploy-pages && 'github-pages' || '' }}
+    env:
+      SHOULD_DEPLOY: ${{ inputs.deploy-pages == 'true' || (inputs.deploy-pages == 'auto' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')) }}
+    environment: ${{ (inputs.deploy-pages == 'true' || (inputs.deploy-pages == 'auto' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'))) && 'github-pages' || '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -55,10 +58,10 @@ jobs:
           name: manifest
           path: pages/manifest.json.age
 
-      - if: inputs.deploy-pages && hashFiles('pages/manifest.json.age') != ''
+      - if: env.SHOULD_DEPLOY == 'true' && hashFiles('pages/manifest.json.age') != ''
         uses: actions/upload-pages-artifact@v3
         with:
           path: pages/
-      - if: inputs.deploy-pages && hashFiles('pages/manifest.json.age') != ''
+      - if: env.SHOULD_DEPLOY == 'true' && hashFiles('pages/manifest.json.age') != ''
         uses: actions/deploy-pages@v4
         id: deployment

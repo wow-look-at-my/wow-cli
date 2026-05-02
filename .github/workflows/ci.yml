@@ -22,4 +22,3 @@ jobs:
     uses: ./.github/workflows/deploy-manifest.yml
     with:
       org: wow-look-at-my
-      deploy-pages: ${{ github.ref == 'refs/heads/master' }}
