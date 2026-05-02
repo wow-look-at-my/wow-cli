@@ -56,11 +56,12 @@ manifest URL isn't re-fetched per package.
 
 ## Encrypted manifest format
 
-age X25519, multi-recipient. The CI-side `WOW_MANIFEST_RECIPIENT` secret holds
-one or more recipients (`age1...`), separated by newlines or commas (per
-`splitRecipients`). `manifest.Encrypt` takes `[]string` and emits a single
-ciphertext that any of the corresponding identities can decrypt — that's what
-makes per-user keys + revocation work. Each user holds their own
+age X25519, multi-recipient. The list of recipients lives in `recipients.json`
+at the repo root (checked into git for auditability). `manifest.LoadRecipients`
+accepts the object form (`{"recipients": [...]}`), a bare array of objects, or
+a bare array of strings. `manifest.Encrypt` takes `[]string` and emits a
+single ciphertext that any of the corresponding identities can decrypt —
+that's what makes per-user keys + revocation work. Each user holds their own
 `AGE-SECRET-KEY-...` identity and passes it to `wow add-src`.
 
 Both halves are kept secret in this design (the manifest itself is meant to
@@ -68,8 +69,9 @@ be private), so the "public/private" naming is loose: functionally it's a
 shared-recipient-set / per-user-identity scheme.
 
 `wow keygen` generates one keypair per invocation; run it N times to onboard
-N users. Revoke a user by dropping their recipient from `WOW_MANIFEST_RECIPIENT`
-and republishing.
+N users. Revoke a user by removing their entry from `recipients.json` and
+republishing. The pages workflow uses `jq` to skip publishing when
+`recipients.json` is empty so initial setup doesn't break the pages deploy.
 
 ## Build version detection and self-update
 

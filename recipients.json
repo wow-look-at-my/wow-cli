@@ -1,0 +1,4 @@
+{
+  "_comment": "Each entry is one user authorized to decrypt the published manifest. Add via PR; revoke by removing the entry. Both halves of an age X25519 keypair come from `wow keygen`; users keep the AGE-SECRET-KEY-... half private.",
+  "recipients": []
+}

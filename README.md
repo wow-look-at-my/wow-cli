@@ -128,7 +128,7 @@ wow keygen
 
 #### `build-manifest`
 
-Walk a GitHub org's repos, gather their releases, and emit an age-encrypted manifest. Used by CI to refresh the published manifest. Recipients (one per authorized user) come from repeated `--recipient` flags or the `WOW_MANIFEST_RECIPIENT` environment variable.
+Walk a GitHub org's repos, gather their releases, and emit an age-encrypted manifest. Used by CI to refresh the published manifest. Recipients come from `recipients.json` (one entry per authorized user) and from any `--recipient` flags; both sources are merged.
 
 ```sh
 wow build-manifest --org wow-look-at-my --output manifest.json.age
@@ -136,21 +136,36 @@ wow build-manifest --org wow-look-at-my --output manifest.json.age
 
 Flags:
 - `--org <org>` — GitHub org to enumerate (default: `wow-look-at-my`)
-- `--recipient <age1...>` — age recipient public key (repeatable)
+- `--recipients-file <path>` — JSON file of recipients (default: `recipients.json`; pass `""` to skip)
+- `--recipient <age1...>` — age recipient public key (repeatable, merged with the file)
 - `--output <file>` — output file (`-` for stdout, default `-`)
 - `--plain` — write plain JSON instead of encrypting (debugging)
 
-`WOW_MANIFEST_RECIPIENT` accepts multiple keys, separated by newlines or commas — so the GitHub Actions secret editor's natural multi-line form works directly.
+### `recipients.json`
+
+The list of who can decrypt the manifest lives in `recipients.json` at the repo root. It's checked into git so additions and revocations are auditable in the history and reviewable as PRs:
+
+```json
+{
+  "recipients": [
+    {"name": "alice",  "key": "age1...",  "note": "laptop, added 2026-05-01"},
+    {"name": "bob",    "key": "age1..."},
+    {"name": "ci-bot", "key": "age1...",  "note": "for nightly fleet provisioning"}
+  ]
+}
+```
+
+Accepted shapes: the object form above, a bare array of objects, or a bare array of strings. `name` and `note` are optional but recommended — that's the whole reason for keeping the list in git.
 
 ### Setting up a private package source
 
 1. For each user who should be able to install from the manifest, run `wow keygen` once. Each invocation prints a unique recipient/identity pair.
-2. Collect every recipient (`age1...`) and put them all into the `WOW_MANIFEST_RECIPIENT` GitHub Actions secret, one per line. The included [pages workflow](.github/workflows/pages.yml) encrypts the manifest to all of them and publishes `manifest.json.age` to GitHub Pages.
+2. PR each user's recipient (`age1...`) into `recipients.json` with a name and optional note. The included [pages workflow](.github/workflows/pages.yml) encrypts the manifest to everyone in that file and publishes `manifest.json.age` to GitHub Pages on every push to master.
 3. Distribute each identity (`AGE-SECRET-KEY-...`) out-of-band to its corresponding user. They run `wow add-src <pages url>/manifest.json.age <their identity>` to start installing from your manifest without hitting the GitHub API.
 
-To revoke a user, remove their recipient from `WOW_MANIFEST_RECIPIENT` and re-run the pages workflow. They'll lose access on the next manifest publish; existing identities held by other users keep working.
+To revoke a user, send a PR removing their entry from `recipients.json`. On the next deploy, the new manifest no longer encrypts to their key; their copy of the file becomes useless. Other users' identities keep working.
 
-The published manifest is encrypted before it leaves the runner, so it's safe to host on a public URL — only holders of one of the configured identities can read it.
+The published manifest is encrypted before it leaves the runner, so it's safe to host on a public URL — only holders of one of the listed identities can read it. If `recipients.json` is empty, the workflow skips manifest publishing and just deploys the rest of `pages/`.
 
 ## State
 
