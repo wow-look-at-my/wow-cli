@@ -17,9 +17,9 @@ jobs:
         with:
           autorelease: 'true'
 
-  pages:
+  manifest:
     needs: ci
     uses: ./.github/workflows/deploy-manifest.yml
     with:
       org: wow-look-at-my
-      deploy-pages: true
+      deploy-pages: ${{ github.ref == 'refs/heads/master' }}
