@@ -27,9 +27,7 @@ jobs:
     concurrency:
       group: pages
       cancel-in-progress: true
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    environment: ${{ inputs.deploy-pages && 'github-pages' || '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -52,14 +50,15 @@ jobs:
           ${{ steps.wow.outputs.path }} "${args[@]}"
 
       - uses: actions/upload-artifact@v4
+        if: hashFiles('pages/manifest.json.age') != ''
         with:
           name: manifest
           path: pages/manifest.json.age
 
-      - if: inputs.deploy-pages
+      - if: inputs.deploy-pages && hashFiles('pages/manifest.json.age') != ''
         uses: actions/upload-pages-artifact@v3
         with:
           path: pages/
-      - if: inputs.deploy-pages
+      - if: inputs.deploy-pages && hashFiles('pages/manifest.json.age') != ''
         uses: actions/deploy-pages@v4
         id: deployment
