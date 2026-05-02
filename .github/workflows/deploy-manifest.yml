@@ -1,0 +1,53 @@
+name: Deploy Manifest
+
+on:
+  workflow_call:
+    inputs:
+      org:
+        required: true
+        type: string
+      deploy-pages:
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  pages: write
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install wow
+        id: wow
+        uses: wow-look-at-my/actions/download-release-binary@v1
+        with:
+          repo: wow-look-at-my/wow-cli
+          name: wow-cli
+          token: ${{ github.token }}
+
+      - name: Build encrypted manifest
+        run: ${{ steps.wow.outputs.path }} build-manifest --org ${{ inputs.org }} --output pages/manifest.json.age --skip-if-empty
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manifest
+          path: pages/manifest.json.age
+
+      - if: inputs.deploy-pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages/
+      - if: inputs.deploy-pages
+        uses: actions/deploy-pages@v4
+        id: deployment

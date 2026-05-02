@@ -9,7 +9,7 @@ permissions:
   pages: write
 
 jobs:
-  test:
+  ci:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,30 +18,9 @@ jobs:
           autorelease: 'true'
 
   pages:
-    needs: test
     if: github.ref == 'refs/heads/master'
-    runs-on: ubuntu-latest
-    concurrency:
-      group: pages
-      cancel-in-progress: true
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: go-build
-          path: build/
-      - name: Build encrypted manifest
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          chmod +x build/wow-cli_linux_amd64
-          ./build/wow-cli_linux_amd64 build-manifest --output pages/manifest.json.age
-      - uses: actions/configure-pages@v4
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: pages/
-      - uses: actions/deploy-pages@v4
-        id: deployment
+    needs: ci
+    uses: ./.github/workflows/deploy-manifest.yml
+    with:
+      org: wow-look-at-my
+      deploy-pages: true
