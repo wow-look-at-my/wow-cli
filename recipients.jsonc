@@ -1,0 +1,10 @@
+// Each entry is one user authorized to decrypt the published manifest.
+// Add via PR; revoke by removing the entry. Both halves of an age X25519
+// keypair come from `wow keygen`; users keep the AGE-SECRET-KEY-... half
+// private and only their `age1...` recipient goes here.
+{
+  "$schema": "./recipients.schema.json",
+  "recipients": [
+    // {"name": "alice", "key": "age1...", "note": "laptop"}
+  ]
+}

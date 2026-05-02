@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wow-look-at-my.github.io/wow-cli/recipients.schema.json",
+  "title": "wow-cli recipients",
+  "description": "List of users authorized to decrypt the wow encrypted manifest. Each entry pairs an age X25519 recipient (public key) with a human-readable name. The wow build-manifest command reads this file and encrypts the manifest to every listed key; revoking a user is removing their entry and republishing.",
+  "type": "object",
+  "required": ["recipients"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "URI of the schema this file conforms to (used by editors)."
+    },
+    "recipients": {
+      "type": "array",
+      "description": "Authorized recipients, in any order.",
+      "items": { "$ref": "#/$defs/recipient" }
+    }
+  },
+  "$defs": {
+    "recipient": {
+      "type": "object",
+      "required": ["key"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable label for the holder of this key (e.g. \"alice\", \"ci-bot\")."
+        },
+        "key": {
+          "type": "string",
+          "pattern": "^age1[0-9a-z]+$",
+          "description": "age X25519 recipient public key, generated via `wow keygen`."
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional free-form context (device, date added, etc)."
+        }
+      }
+    }
+  }
+}

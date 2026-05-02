@@ -6,12 +6,19 @@ on:
 permissions:
   id-token: write
   contents: write
+  pages: write
 
 jobs:
-  test:
+  ci:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: wow-look-at-my/go-toolchain@v1
         with:
           autorelease: 'true'
+
+  manifest:
+    needs: ci
+    uses: ./.github/workflows/deploy-manifest.yml
+    with:
+      org: wow-look-at-my

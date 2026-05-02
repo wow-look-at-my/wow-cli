@@ -46,6 +46,8 @@ Flags:
 - `--path <path>` — override the install path (default: `~/.local/bin/<name>`)
 - `--version <tag>` — install a specific release tag (default: latest)
 
+When repos are configured (see below), `install` checks them first and falls back to the GitHub API only when no repo has the package.
+
 #### `update`
 
 Update all installed packages to their latest releases. Also updates `wow` itself.
@@ -88,6 +90,87 @@ wow version --bare
 wow --version
 ```
 
+### Encrypted manifest repos
+
+`wow` can install packages from an encrypted manifest hosted at any URL, with no GitHub API access required at install time. The manifest is JSON encrypted with [age](https://age-encryption.org), distributed along with a key that decrypts it.
+
+#### `add-src <url> <key>`
+
+Register an encrypted-manifest repo. `key` is the age identity (private key, `AGE-SECRET-KEY-...`) that decrypts the manifest at `url`. The repo is fetched and decrypted immediately to verify the key is valid.
+
+```sh
+wow add-src https://wow-look-at-my.github.io/wow-cli/manifest.json.age AGE-SECRET-KEY-...
+```
+
+#### `remove-src <url>`
+
+Remove a configured repo.
+
+```sh
+wow remove-src https://wow-look-at-my.github.io/wow-cli/manifest.json.age
+```
+
+#### `list-src`
+
+List configured repos. The decryption key is shown truncated.
+
+```sh
+wow list-src
+```
+
+#### `keygen`
+
+Generate a fresh age X25519 keypair for publishing a manifest. Prints both halves; the recipient is what your CI uses to encrypt, the identity is what one user passes to `add-src`. Run it once per user.
+
+```sh
+wow keygen
+```
+
+#### `build-manifest`
+
+Walk a GitHub org's repos, gather their releases, and emit an age-encrypted manifest. Used by CI to refresh the published manifest. Recipients come from `recipients.jsonc` (one entry per authorized user) and from any `--recipient` flags; both sources are merged.
+
+```sh
+wow build-manifest --org wow-look-at-my --output manifest.json.age
+```
+
+Flags:
+- `--org <org>` — GitHub org to enumerate (default: `wow-look-at-my`)
+- `--recipients-file <path>` — JSON file of recipients (default: `recipients.jsonc`; pass `""` to skip)
+- `--recipient <age1...>` — age recipient public key (repeatable, merged with the file)
+- `--output <file>` — output file (`-` for stdout, default `-`)
+- `--plain` — write plain JSON instead of encrypting (debugging)
+
+### `recipients.jsonc`
+
+The list of who can decrypt the manifest lives in `recipients.jsonc` at the repo root. It's checked into git so additions and revocations are auditable in the history and reviewable as PRs. Both `//` and `/* */` comments are supported:
+
+```jsonc
+// Members of the wow private package source.
+{
+  "$schema": "./recipients.schema.json",
+  "recipients": [
+    {"name": "alice",  "key": "age1...",  "note": "laptop, added 2026-05-01"},
+    {"name": "bob",    "key": "age1..."},
+    {"name": "ci-bot", "key": "age1...",  "note": "for nightly fleet provisioning"}
+  ]
+}
+```
+
+Accepted shapes: the object form above, a bare array of objects, or a bare array of strings. `name` and `note` are optional but recommended — that's the whole reason for keeping the list in git.
+
+A JSON Schema (`recipients.schema.json`) ships in the repo root for editor validation. Reference it with `"$schema": "./recipients.schema.json"` at the top of your file (the loader ignores the key).
+
+### Setting up a private package repo
+
+1. For each user who should be able to install from the manifest, run `wow keygen` once. Each invocation prints a unique recipient/identity pair.
+2. PR each user's recipient (`age1...`) into `recipients.jsonc` with a name and optional note. The included [CI workflow](.github/workflows/ci.yml) encrypts the manifest to everyone in that file and publishes `manifest.json.age` to GitHub Pages on every push to master.
+3. Distribute each identity (`AGE-SECRET-KEY-...`) out-of-band to its corresponding user. They run `wow add-src <pages url>/manifest.json.age <their identity>` to start installing from your manifest without hitting the GitHub API.
+
+To revoke a user, send a PR removing their entry from `recipients.jsonc`. On the next deploy, the new manifest no longer encrypts to their key; their copy of the file becomes useless. Other users' identities keep working.
+
+The published manifest is encrypted before it leaves the runner, so it's safe to host on a public URL — only holders of one of the listed identities can read it. If `recipients.jsonc` is empty, the workflow skips manifest publishing and just deploys the rest of `pages/`.
+
 ## State
 
 Package state is stored as JSON at:
@@ -95,6 +178,8 @@ Package state is stored as JSON at:
 1. `$WOW_STATE_DIR/packages.json` (if set)
 2. `$XDG_DATA_HOME/wow/packages.json`
 3. `~/.local/share/wow/packages.json` (default)
+
+Repo state (configured manifest endpoints) lives next to it as `repos.json` (file mode 0600 since it holds decryption keys).
 
 ## Compatibility
 

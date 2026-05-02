@@ -1,0 +1,66 @@
+name: Deploy Manifest
+
+on:
+  workflow_call:
+    inputs:
+      org:
+        required: true
+        type: string
+      include:
+        description: 'Space-separated glob patterns for repo names to include (omit for all)'
+        required: false
+        type: string
+        default: ''
+      deploy-pages:
+        description: '"true", "false", or "auto" (deploy on master/main only)'
+        required: false
+        type: string
+        default: 'auto'
+
+permissions:
+  pages: write
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: true
+    env:
+      SHOULD_DEPLOY: ${{ inputs.deploy-pages == 'true' || (inputs.deploy-pages == 'auto' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')) }}
+    environment: ${{ (inputs.deploy-pages == 'true' || (inputs.deploy-pages == 'auto' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'))) && 'github-pages' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install wow
+        uses: actions/download-artifact@v4
+        with:
+          name: go-build
+          path: build/
+
+      - name: Build encrypted manifest
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          chmod +x build/wow-cli_linux_amd64
+          args=(build-manifest --org "${{ inputs.org }}" --output pages/manifest.json.age --skip-if-empty)
+          for pattern in ${{ inputs.include }}; do
+            args+=(--include "$pattern")
+          done
+          ./build/wow-cli_linux_amd64 "${args[@]}"
+
+      - uses: actions/upload-artifact@v4
+        if: hashFiles('pages/manifest.json.age') != ''
+        with:
+          name: manifest
+          path: pages/manifest.json.age
+
+      - if: env.SHOULD_DEPLOY == 'true' && hashFiles('pages/manifest.json.age') != ''
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages/
+      - if: env.SHOULD_DEPLOY == 'true' && hashFiles('pages/manifest.json.age') != ''
+        uses: actions/deploy-pages@v4
+        id: deployment
