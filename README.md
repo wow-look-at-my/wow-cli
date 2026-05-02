@@ -46,6 +46,8 @@ Flags:
 - `--path <path>` — override the install path (default: `~/.local/bin/<name>`)
 - `--version <tag>` — install a specific release tag (default: latest)
 
+When sources are configured (see below), `install` checks them first and falls back to the GitHub API only when no source has the package.
+
 #### `update`
 
 Update all installed packages to their latest releases. Also updates `wow` itself.
@@ -88,6 +90,64 @@ wow version --bare
 wow --version
 ```
 
+### Encrypted manifest sources
+
+`wow` can install packages from an encrypted manifest hosted at any URL, with no GitHub API access required at install time. The manifest is JSON encrypted with [age](https://age-encryption.org), distributed along with a key that decrypts it.
+
+#### `add-src <url> <key>`
+
+Register an encrypted-manifest source. `key` is the age identity (private key, `AGE-SECRET-KEY-...`) that decrypts the manifest at `url`. The source is fetched and decrypted immediately to verify the key is valid.
+
+```sh
+wow add-src https://wow-look-at-my.github.io/wow-cli/manifest.json.age AGE-SECRET-KEY-...
+```
+
+#### `remove-src <url>`
+
+Remove a configured source.
+
+```sh
+wow remove-src https://wow-look-at-my.github.io/wow-cli/manifest.json.age
+```
+
+#### `list-src`
+
+List configured sources. The decryption key is shown truncated.
+
+```sh
+wow list-src
+```
+
+#### `keygen`
+
+Generate a fresh age X25519 keypair for publishing a manifest. Prints both halves; the recipient is what your CI uses to encrypt, the identity is what users pass to `add-src`.
+
+```sh
+wow keygen
+```
+
+#### `build-manifest`
+
+Walk a GitHub org's repos, gather their releases, and emit an age-encrypted manifest. Used by CI to refresh the published manifest. Reads the recipient from `--recipient` or the `WOW_MANIFEST_RECIPIENT` environment variable.
+
+```sh
+wow build-manifest --org wow-look-at-my --output manifest.json.age
+```
+
+Flags:
+- `--org <org>` — GitHub org to enumerate (default: `wow-look-at-my`)
+- `--recipient <age1...>` — age recipient public key
+- `--output <file>` — output file (`-` for stdout, default `-`)
+- `--plain` — write plain JSON instead of encrypting (debugging)
+
+### Setting up a private package source
+
+1. Generate a keypair on your laptop: `wow keygen`. This prints two strings — keep both private.
+2. Add the recipient (`age1...`) as the `WOW_MANIFEST_RECIPIENT` GitHub Actions secret on the repo that publishes the manifest. The included [pages workflow](.github/workflows/pages.yml) uses it to encrypt and publish `manifest.json.age` to GitHub Pages.
+3. Distribute the identity (`AGE-SECRET-KEY-...`) out-of-band to authorized users. They run `wow add-src <pages url>/manifest.json.age <identity>` to start installing from your manifest without hitting the GitHub API.
+
+The published manifest is encrypted before it leaves the runner, so it's safe to host on a public URL — only holders of the identity can read it.
+
 ## State
 
 Package state is stored as JSON at:
@@ -95,6 +155,8 @@ Package state is stored as JSON at:
 1. `$WOW_STATE_DIR/packages.json` (if set)
 2. `$XDG_DATA_HOME/wow/packages.json`
 3. `~/.local/share/wow/packages.json` (default)
+
+Source state lives next to it as `sources.json` (file mode 0600 since it holds decryption keys).
 
 ## Compatibility
 

@@ -37,8 +37,11 @@ func runUpdate(cmd *cobra.Command, _ []string) error {
 	if len(targets) == 0 {
 		fmt.Fprintln(cmd.OutOrStdout(), "No packages installed.")
 	} else {
+		// Cache source manifests for the whole update pass to avoid refetching
+		// the same source URL for every installed package.
+		cache := newSourceCache()
 		for _, pkg := range targets {
-			if err := updateOne(cmd, s, pkg); err != nil {
+			if err := updateOne(cmd, s, pkg, cache); err != nil {
 				return err
 			}
 		}
@@ -47,7 +50,29 @@ func runUpdate(cmd *cobra.Command, _ []string) error {
 	return selfUpdateWow(cmd)
 }
 
-func updateOne(cmd *cobra.Command, s *store.Store, pkg *store.Package) error {
+func updateOne(cmd *cobra.Command, s *store.Store, pkg *store.Package, cache *sourceCache) error {
+	hit, err := cache.find(context.Background(), pkg.Slug, pkg.Name, "")
+	if err != nil {
+		return err
+	}
+	if hit != nil {
+		if hit.Tag == pkg.Version {
+			fmt.Fprintf(cmd.OutOrStdout(), "%s is already up to date (%s)\n", pkg.Name, pkg.Version)
+			return nil
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Updating %s %s -> %s from source %s...\n", pkg.Name, pkg.Version, hit.Tag, hit.Source.URL)
+		if err := installFromAsset(cmd, hit.Asset, pkg.Path); err != nil {
+			return err
+		}
+		pkg.Version = hit.Tag
+		s.Add(pkg)
+		if err := s.Save(); err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Updated %s -> %s\n", pkg.Name, pkg.Version)
+		return nil
+	}
+
 	fmt.Fprintf(cmd.OutOrStdout(), "Checking latest release for %s...\n", pkg.Slug)
 	rel, err := detectLatest(pkg.Slug)
 	if err != nil {

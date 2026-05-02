@@ -5,9 +5,9 @@ on:
     branches: [master]
 
 permissions:
+  id-token: write
   contents: read
   pages: write
-  id-token: write
 
 concurrency:
   group: pages
@@ -19,8 +19,27 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      WOW_MANIFEST_RECIPIENT: ${{ secrets.WOW_MANIFEST_RECIPIENT }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Build wow binary
+        if: env.WOW_MANIFEST_RECIPIENT != ''
+        uses: wow-look-at-my/go-toolchain@v1
+        with:
+          os: linux
+          arch: amd64
+          autorelease: 'false'
+          upload-artifacts: 'false'
+
+      - name: Build encrypted manifest
+        if: env.WOW_MANIFEST_RECIPIENT != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          ./build/wow-cli_linux_amd64 build-manifest --output pages/manifest.json.age
+
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v3
         with:

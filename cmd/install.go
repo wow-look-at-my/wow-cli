@@ -3,10 +3,13 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 	selfupdate "github.com/wow-look-at-my/go-selfupdate-mini"
+	"github.com/wow-look-at-my/wow-cli/manifest"
 	"github.com/wow-look-at-my/wow-cli/store"
 )
 
@@ -53,6 +56,25 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// First look in configured sources. A hit avoids the GitHub API entirely.
+	hit, err := findInSources(context.Background(), slug, name, installVersion)
+	if err != nil {
+		return err
+	}
+	if hit != nil {
+		fmt.Fprintf(cmd.OutOrStdout(), "Installing %s %s from source %s...\n", name, hit.Tag, hit.Source.URL)
+		if err := installFromAsset(cmd, hit.Asset, dest); err != nil {
+			return err
+		}
+		return recordInstall(cmd, slug, name, dest, hit.Tag)
+	}
+
+	return installFromGitHub(cmd, args[0], slug, name, dest)
+}
+
+// installFromGitHub is the original GitHub-API code path for when no source
+// matches.
+func installFromGitHub(cmd *cobra.Command, input, slug, name, dest string) error {
 	up, err := newUpdater()
 	if err != nil {
 		return err
@@ -65,7 +87,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		if rel == nil {
-			slug, rel, err = suggestAndConfirm(cmd, args[0], slug, func(s string) (*selfupdate.Release, error) {
+			slug, rel, err = suggestAndConfirm(cmd, input, slug, func(s string) (*selfupdate.Release, error) {
 				r, _, e := up.DetectVersion(context.Background(), selfupdate.ParseSlug(s), installVersion)
 				return r, e
 			})
@@ -80,7 +102,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(cmd.OutOrStdout(), "Fetching latest release for %s...\n", slug)
 		rel, err = detectLatest(slug)
 		if err != nil {
-			slug, rel, err = suggestAndConfirm(cmd, args[0], slug, detectLatest)
+			slug, rel, err = suggestAndConfirm(cmd, input, slug, detectLatest)
 			if err != nil {
 				return err
 			}
@@ -94,7 +116,25 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	if err := installRelease(rel, dest); err != nil {
 		return err
 	}
+	return recordInstall(cmd, slug, name, dest, rel.Version.Original)
+}
 
+// installFromAsset downloads an asset URL named in a manifest and writes it
+// to dest atomically. Creates the parent directory if needed.
+func installFromAsset(cmd *cobra.Command, asset *manifest.Asset, dest string) error {
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return fmt.Errorf("create install directory: %w", err)
+	}
+	body, _, err := manifest.DownloadAsset(context.Background(), asset.URL)
+	if err != nil {
+		return err
+	}
+	defer body.Close()
+	return installAtomic(body, dest)
+}
+
+// recordInstall writes the package entry to the store and prints a summary.
+func recordInstall(cmd *cobra.Command, slug, name, dest, version string) error {
 	s, err := store.Load()
 	if err != nil {
 		return err
@@ -103,13 +143,12 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		Slug:    slug,
 		Name:    name,
 		Path:    dest,
-		Version: rel.Version.Original,
+		Version: version,
 	})
 	if err := s.Save(); err != nil {
 		return err
 	}
-
-	fmt.Fprintf(cmd.OutOrStdout(), "Installed %s %s -> %s\n", name, rel.Version.Original, dest)
+	fmt.Fprintf(cmd.OutOrStdout(), "Installed %s %s -> %s\n", name, version, dest)
 	return nil
 }
 
