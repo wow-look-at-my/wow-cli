@@ -6,12 +6,34 @@ on:
 permissions:
   id-token: write
   contents: write
+  pages: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
 
 jobs:
-  test:
+  ci:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: wow-look-at-my/go-toolchain@v1
         with:
           autorelease: 'true'
+
+      - if: github.ref == 'refs/heads/master'
+        name: Build encrypted manifest
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: ./build/wow-cli_linux_amd64 build-manifest --output pages/manifest.json.age
+
+      - if: github.ref == 'refs/heads/master'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages/
+      - if: github.ref == 'refs/heads/master'
+        uses: actions/deploy-pages@v4
+        id: deployment
