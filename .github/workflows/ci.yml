@@ -8,32 +8,40 @@ permissions:
   contents: write
   pages: write
 
-concurrency:
-  group: pages
-  cancel-in-progress: true
-
 jobs:
-  ci:
+  test:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: wow-look-at-my/go-toolchain@v1
         with:
           autorelease: 'true'
 
-      - if: github.ref == 'refs/heads/master'
-        name: Build encrypted manifest
+  pages:
+    needs: test
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: go-build
+          path: build/
+      - name: Build encrypted manifest
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: ./build/wow-cli_linux_amd64 build-manifest --output pages/manifest.json.age
-
-      - if: github.ref == 'refs/heads/master'
-        uses: actions/upload-pages-artifact@v3
+        run: |
+          chmod +x build/wow-cli_linux_amd64
+          ./build/wow-cli_linux_amd64 build-manifest --output pages/manifest.json.age
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: pages/
-      - if: github.ref == 'refs/heads/master'
-        uses: actions/deploy-pages@v4
+      - uses: actions/deploy-pages@v4
         id: deployment

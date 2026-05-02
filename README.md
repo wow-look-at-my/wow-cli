@@ -164,7 +164,7 @@ A JSON Schema (`recipients.schema.json`) ships in the repo root for editor valid
 ### Setting up a private package repo
 
 1. For each user who should be able to install from the manifest, run `wow keygen` once. Each invocation prints a unique recipient/identity pair.
-2. PR each user's recipient (`age1...`) into `recipients.jsonc` with a name and optional note. The included [pages workflow](.github/workflows/pages.yml) encrypts the manifest to everyone in that file and publishes `manifest.json.age` to GitHub Pages on every push to master.
+2. PR each user's recipient (`age1...`) into `recipients.jsonc` with a name and optional note. The included [CI workflow](.github/workflows/ci.yml) encrypts the manifest to everyone in that file and publishes `manifest.json.age` to GitHub Pages on every push to master.
 3. Distribute each identity (`AGE-SECRET-KEY-...`) out-of-band to its corresponding user. They run `wow add-src <pages url>/manifest.json.age <their identity>` to start installing from your manifest without hitting the GitHub API.
 
 To revoke a user, send a PR removing their entry from `recipients.jsonc`. On the next deploy, the new manifest no longer encrypts to their key; their copy of the file becomes useless. Other users' identities keep working.
