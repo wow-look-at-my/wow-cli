@@ -35,22 +35,21 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install wow
-        id: wow
-        uses: wow-look-at-my/actions/download-release-binary@master
+        uses: actions/download-artifact@v4
         with:
-          repo: wow-look-at-my/wow-cli
-          name: wow-cli
-          token: ${{ github.token }}
+          name: go-build
+          path: build/
 
       - name: Build encrypted manifest
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
+          chmod +x build/wow-cli_linux_amd64
           args=(build-manifest --org "${{ inputs.org }}" --output pages/manifest.json.age --skip-if-empty)
           for pattern in ${{ inputs.include }}; do
             args+=(--include "$pattern")
           done
-          ${{ steps.wow.outputs.path }} "${args[@]}"
+          ./build/wow-cli_linux_amd64 "${args[@]}"
 
       - uses: actions/upload-artifact@v4
         if: hashFiles('pages/manifest.json.age') != ''
