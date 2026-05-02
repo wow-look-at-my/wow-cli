@@ -99,12 +99,24 @@ func (p *Package) findAsset(tag, assetName string) *Asset {
 	return nil
 }
 
-// Encrypt serializes m to JSON and encrypts it for the given age recipient.
-// The recipient is typically an X25519 public key (e.g. "age1...").
-func Encrypt(m *Manifest, recipient string) ([]byte, error) {
-	r, err := age.ParseX25519Recipient(recipient)
-	if err != nil {
-		return nil, fmt.Errorf("parse recipient: %w", err)
+// Encrypt serializes m to JSON and encrypts it for one or more age
+// recipients. Any of the matching identities can decrypt the result, which
+// is what enables per-user keys: generate one keypair per user, encrypt to
+// all their recipients here, and revoke a user later by dropping their
+// recipient from the list.
+//
+// Recipients are typically X25519 public keys (e.g. "age1...").
+func Encrypt(m *Manifest, recipients []string) ([]byte, error) {
+	if len(recipients) == 0 {
+		return nil, fmt.Errorf("at least one recipient is required")
+	}
+	parsed := make([]age.Recipient, 0, len(recipients))
+	for i, r := range recipients {
+		pr, err := age.ParseX25519Recipient(r)
+		if err != nil {
+			return nil, fmt.Errorf("parse recipient #%d: %w", i+1, err)
+		}
+		parsed = append(parsed, pr)
 	}
 	plaintext, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
@@ -112,7 +124,7 @@ func Encrypt(m *Manifest, recipient string) ([]byte, error) {
 	}
 
 	var buf bytes.Buffer
-	w, err := age.Encrypt(&buf, r)
+	w, err := age.Encrypt(&buf, parsed...)
 	if err != nil {
 		return nil, fmt.Errorf("init encrypt: %w", err)
 	}

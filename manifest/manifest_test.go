@@ -42,7 +42,7 @@ func TestEncryptDecrypt_Roundtrip(t *testing.T) {
 		},
 	}
 
-	ciphertext, err := Encrypt(m, recipient)
+	ciphertext, err := Encrypt(m, []string{recipient})
 	require.Nil(t, err)
 	assert.True(t, len(ciphertext) > 0)
 
@@ -57,11 +57,36 @@ func TestEncryptDecrypt_Roundtrip(t *testing.T) {
 	assert.Equal(t, "tool_linux_amd64", pkg.Releases[0].Assets[0].Name)
 }
 
+func TestEncrypt_MultipleRecipients_AnyIdentityCanDecrypt(t *testing.T) {
+	recipientA, identityA := newKeyPair(t)
+	recipientB, identityB := newKeyPair(t)
+	_, otherIdentity := newKeyPair(t)
+
+	ciphertext, err := Encrypt(New(), []string{recipientA, recipientB})
+	require.Nil(t, err)
+
+	// Either rightful holder can decrypt.
+	_, err = Decrypt(ciphertext, identityA)
+	assert.Nil(t, err)
+	_, err = Decrypt(ciphertext, identityB)
+	assert.Nil(t, err)
+
+	// Outsider still cannot.
+	_, err = Decrypt(ciphertext, otherIdentity)
+	assert.NotNil(t, err)
+}
+
+func TestEncrypt_NoRecipients(t *testing.T) {
+	_, err := Encrypt(New(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "at least one recipient")
+}
+
 func TestDecrypt_WrongKey(t *testing.T) {
 	recipient, _ := newKeyPair(t)
 	_, otherIdentity := newKeyPair(t)
 
-	ciphertext, err := Encrypt(New(), recipient)
+	ciphertext, err := Encrypt(New(), []string{recipient})
 	require.Nil(t, err)
 
 	_, err = Decrypt(ciphertext, otherIdentity)
@@ -69,7 +94,7 @@ func TestDecrypt_WrongKey(t *testing.T) {
 }
 
 func TestEncrypt_BadRecipient(t *testing.T) {
-	_, err := Encrypt(New(), "not-a-real-recipient")
+	_, err := Encrypt(New(), []string{"not-a-real-recipient"})
 	assert.NotNil(t, err)
 }
 
@@ -113,7 +138,7 @@ func TestFetch_Roundtrip(t *testing.T) {
 	m := New()
 	m.Packages["a/b"] = &Package{Slug: "a/b", Latest: "v1"}
 
-	ciphertext, err := Encrypt(m, recipient)
+	ciphertext, err := Encrypt(m, []string{recipient})
 	require.Nil(t, err)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

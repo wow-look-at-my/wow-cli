@@ -35,7 +35,7 @@ func TestKeygen_OutputsParseableKeyPair(t *testing.T) {
 	require.Nil(t, err)
 	assert.Equal(t, r.String(), id.Recipient().String())
 
-	cipher, err := manifest.Encrypt(manifest.New(), recipient)
+	cipher, err := manifest.Encrypt(manifest.New(), []string{recipient})
 	require.Nil(t, err)
 	_, err = manifest.Decrypt(cipher, identity)
 	assert.Nil(t, err)

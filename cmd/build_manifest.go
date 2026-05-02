@@ -7,24 +7,29 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/wow-look-at-my/wow-cli/manifest"
 )
 
 var (
-	buildManifestOrg       string
-	buildManifestRecipient string
-	buildManifestOutput    string
-	buildManifestUnencrypt bool
+	buildManifestOrg        string
+	buildManifestRecipients []string
+	buildManifestOutput     string
+	buildManifestUnencrypt  bool
 )
 
 var buildManifestCmd = &cobra.Command{
 	Use:   "build-manifest",
 	Short: "Build (and encrypt) a manifest of installable packages",
 	Long: `Walk the configured org's repos, gather their releases, and write
-an age-encrypted manifest. The recipient X25519 public key may be passed via
---recipient or read from the WOW_MANIFEST_RECIPIENT environment variable.
+an age-encrypted manifest. Recipients (age X25519 public keys) may be passed
+via repeated --recipient flags or read from the WOW_MANIFEST_RECIPIENT
+environment variable (newline- or comma-separated for multiple keys).
+
+Encrypting to multiple recipients lets each user hold a different identity.
+Revoke a user by removing their recipient from the list and republishing.
 
 Use --plain to skip encryption (for debugging or generating templates); the
 output is then plain JSON.`,
@@ -34,18 +39,18 @@ output is then plain JSON.`,
 
 func init() {
 	buildManifestCmd.Flags().StringVar(&buildManifestOrg, "org", "wow-look-at-my", "GitHub org to enumerate")
-	buildManifestCmd.Flags().StringVar(&buildManifestRecipient, "recipient", "", "age recipient public key (env: WOW_MANIFEST_RECIPIENT)")
+	buildManifestCmd.Flags().StringArrayVar(&buildManifestRecipients, "recipient", nil, "age recipient public key (repeatable; env: WOW_MANIFEST_RECIPIENT)")
 	buildManifestCmd.Flags().StringVar(&buildManifestOutput, "output", "-", "output file (\"-\" for stdout)")
 	buildManifestCmd.Flags().BoolVar(&buildManifestUnencrypt, "plain", false, "write plain JSON instead of encrypting")
 	rootCmd.AddCommand(buildManifestCmd)
 }
 
 func runBuildManifest(cmd *cobra.Command, _ []string) error {
-	recipient := buildManifestRecipient
-	if recipient == "" {
-		recipient = os.Getenv("WOW_MANIFEST_RECIPIENT")
+	recipients := append([]string{}, buildManifestRecipients...)
+	if env := os.Getenv("WOW_MANIFEST_RECIPIENT"); env != "" {
+		recipients = append(recipients, splitRecipients(env)...)
 	}
-	if recipient == "" && !buildManifestUnencrypt {
+	if len(recipients) == 0 && !buildManifestUnencrypt {
 		return fmt.Errorf("recipient is required (use --recipient or set WOW_MANIFEST_RECIPIENT, or pass --plain)")
 	}
 
@@ -76,7 +81,7 @@ func runBuildManifest(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 	} else {
-		output, err = manifest.Encrypt(m, recipient)
+		output, err = manifest.Encrypt(m, recipients)
 		if err != nil {
 			return err
 		}
@@ -87,6 +92,20 @@ func runBuildManifest(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	return os.WriteFile(buildManifestOutput, output, 0o644)
+}
+
+// splitRecipients parses the WOW_MANIFEST_RECIPIENT env var into individual
+// keys. It accepts both newline- and comma-separated lists so the secret can
+// be entered either as a multi-line value (the natural form in the GitHub
+// Actions secret editor) or as a single line.
+func splitRecipients(s string) []string {
+	var out []string
+	for _, line := range strings.FieldsFunc(s, func(r rune) bool { return r == '\n' || r == ',' }) {
+		if v := strings.TrimSpace(line); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // enumerateOrgRepos returns the search results for org:<org>, reusing the

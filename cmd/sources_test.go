@@ -26,7 +26,7 @@ func newTestKeyPair(t *testing.T) (recipient, identity string) {
 // startManifestServer publishes m encrypted to recipient and returns its URL.
 func startManifestServer(t *testing.T, m *manifest.Manifest, recipient string) string {
 	t.Helper()
-	ciphertext, err := manifest.Encrypt(m, recipient)
+	ciphertext, err := manifest.Encrypt(m, []string{recipient})
 	require.Nil(t, err)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write(ciphertext)

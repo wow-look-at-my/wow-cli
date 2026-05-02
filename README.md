@@ -120,7 +120,7 @@ wow list-src
 
 #### `keygen`
 
-Generate a fresh age X25519 keypair for publishing a manifest. Prints both halves; the recipient is what your CI uses to encrypt, the identity is what users pass to `add-src`.
+Generate a fresh age X25519 keypair for publishing a manifest. Prints both halves; the recipient is what your CI uses to encrypt, the identity is what one user passes to `add-src`. Run it once per user.
 
 ```sh
 wow keygen
@@ -128,7 +128,7 @@ wow keygen
 
 #### `build-manifest`
 
-Walk a GitHub org's repos, gather their releases, and emit an age-encrypted manifest. Used by CI to refresh the published manifest. Reads the recipient from `--recipient` or the `WOW_MANIFEST_RECIPIENT` environment variable.
+Walk a GitHub org's repos, gather their releases, and emit an age-encrypted manifest. Used by CI to refresh the published manifest. Recipients (one per authorized user) come from repeated `--recipient` flags or the `WOW_MANIFEST_RECIPIENT` environment variable.
 
 ```sh
 wow build-manifest --org wow-look-at-my --output manifest.json.age
@@ -136,17 +136,21 @@ wow build-manifest --org wow-look-at-my --output manifest.json.age
 
 Flags:
 - `--org <org>` — GitHub org to enumerate (default: `wow-look-at-my`)
-- `--recipient <age1...>` — age recipient public key
+- `--recipient <age1...>` — age recipient public key (repeatable)
 - `--output <file>` — output file (`-` for stdout, default `-`)
 - `--plain` — write plain JSON instead of encrypting (debugging)
 
+`WOW_MANIFEST_RECIPIENT` accepts multiple keys, separated by newlines or commas — so the GitHub Actions secret editor's natural multi-line form works directly.
+
 ### Setting up a private package source
 
-1. Generate a keypair on your laptop: `wow keygen`. This prints two strings — keep both private.
-2. Add the recipient (`age1...`) as the `WOW_MANIFEST_RECIPIENT` GitHub Actions secret on the repo that publishes the manifest. The included [pages workflow](.github/workflows/pages.yml) uses it to encrypt and publish `manifest.json.age` to GitHub Pages.
-3. Distribute the identity (`AGE-SECRET-KEY-...`) out-of-band to authorized users. They run `wow add-src <pages url>/manifest.json.age <identity>` to start installing from your manifest without hitting the GitHub API.
+1. For each user who should be able to install from the manifest, run `wow keygen` once. Each invocation prints a unique recipient/identity pair.
+2. Collect every recipient (`age1...`) and put them all into the `WOW_MANIFEST_RECIPIENT` GitHub Actions secret, one per line. The included [pages workflow](.github/workflows/pages.yml) encrypts the manifest to all of them and publishes `manifest.json.age` to GitHub Pages.
+3. Distribute each identity (`AGE-SECRET-KEY-...`) out-of-band to its corresponding user. They run `wow add-src <pages url>/manifest.json.age <their identity>` to start installing from your manifest without hitting the GitHub API.
 
-The published manifest is encrypted before it leaves the runner, so it's safe to host on a public URL — only holders of the identity can read it.
+To revoke a user, remove their recipient from `WOW_MANIFEST_RECIPIENT` and re-run the pages workflow. They'll lose access on the next manifest publish; existing identities held by other users keep working.
+
+The published manifest is encrypted before it leaves the runner, so it's safe to host on a public URL — only holders of one of the configured identities can read it.
 
 ## State
 

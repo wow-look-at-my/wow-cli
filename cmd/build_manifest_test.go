@@ -60,7 +60,7 @@ func resetBuildManifestFlags(t *testing.T) {
 	t.Helper()
 	t.Cleanup(func() {
 		buildManifestOrg = "wow-look-at-my"
-		buildManifestRecipient = ""
+		buildManifestRecipients = nil
 		buildManifestOutput = "-"
 		buildManifestUnencrypt = false
 	})
@@ -141,6 +141,154 @@ func TestBuildManifest_RecipientRequired(t *testing.T) {
 	_, err := execute(t, "build-manifest")
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "recipient is required")
+}
+
+func TestBuildManifest_MultipleRecipients(t *testing.T) {
+	withTempState(t)
+	resetBuildManifestFlags(t)
+	withMockGitHub(t,
+		[]map[string]any{{"full_name": "wow-look-at-my/atool", "description": ""}},
+		map[string][]map[string]any{
+			"wow-look-at-my/atool": {{
+				"tag_name": "v1.0.0",
+				"assets":   []map[string]any{{"name": "atool_linux_amd64", "browser_download_url": "http://a"}},
+			}},
+		},
+	)
+
+	recipientA, identityA := newTestKeyPair(t)
+	recipientB, identityB := newTestKeyPair(t)
+
+	tmp := t.TempDir()
+	out := filepath.Join(tmp, "manifest.age")
+	_, err := execute(t, "build-manifest",
+		"--recipient", recipientA,
+		"--recipient", recipientB,
+		"--output", out,
+	)
+	require.Nil(t, err)
+
+	data, err := os.ReadFile(out)
+	require.Nil(t, err)
+
+	// Both identities decrypt independently.
+	mA, err := manifest.Decrypt(data, identityA)
+	require.Nil(t, err)
+	assert.Equal(t, "v1.0.0", mA.Packages["wow-look-at-my/atool"].Latest)
+
+	mB, err := manifest.Decrypt(data, identityB)
+	require.Nil(t, err)
+	assert.Equal(t, "v1.0.0", mB.Packages["wow-look-at-my/atool"].Latest)
+}
+
+func TestBuildManifest_EnvVar_NewlineSeparated(t *testing.T) {
+	withTempState(t)
+	resetBuildManifestFlags(t)
+	withMockGitHub(t,
+		[]map[string]any{{"full_name": "wow-look-at-my/atool", "description": ""}},
+		map[string][]map[string]any{
+			"wow-look-at-my/atool": {{
+				"tag_name": "v1.0.0",
+				"assets":   []map[string]any{{"name": "atool_linux_amd64", "browser_download_url": "http://a"}},
+			}},
+		},
+	)
+
+	recipientA, identityA := newTestKeyPair(t)
+	recipientB, identityB := newTestKeyPair(t)
+	t.Setenv("WOW_MANIFEST_RECIPIENT", recipientA+"\n"+recipientB)
+
+	tmp := t.TempDir()
+	out := filepath.Join(tmp, "manifest.age")
+	_, err := execute(t, "build-manifest", "--output", out)
+	require.Nil(t, err)
+
+	data, err := os.ReadFile(out)
+	require.Nil(t, err)
+	_, err = manifest.Decrypt(data, identityA)
+	assert.Nil(t, err)
+	_, err = manifest.Decrypt(data, identityB)
+	assert.Nil(t, err)
+}
+
+func TestBuildManifest_EnvVar_CommaSeparated(t *testing.T) {
+	withTempState(t)
+	resetBuildManifestFlags(t)
+	withMockGitHub(t,
+		[]map[string]any{{"full_name": "wow-look-at-my/atool", "description": ""}},
+		map[string][]map[string]any{
+			"wow-look-at-my/atool": {{
+				"tag_name": "v1.0.0",
+				"assets":   []map[string]any{{"name": "atool_linux_amd64", "browser_download_url": "http://a"}},
+			}},
+		},
+	)
+
+	recipientA, identityA := newTestKeyPair(t)
+	recipientB, _ := newTestKeyPair(t)
+	t.Setenv("WOW_MANIFEST_RECIPIENT", recipientA+", "+recipientB)
+
+	tmp := t.TempDir()
+	out := filepath.Join(tmp, "manifest.age")
+	_, err := execute(t, "build-manifest", "--output", out)
+	require.Nil(t, err)
+
+	data, err := os.ReadFile(out)
+	require.Nil(t, err)
+	_, err = manifest.Decrypt(data, identityA)
+	assert.Nil(t, err)
+}
+
+func TestBuildManifest_EnvVarMergedWithFlag(t *testing.T) {
+	withTempState(t)
+	resetBuildManifestFlags(t)
+	withMockGitHub(t,
+		[]map[string]any{{"full_name": "wow-look-at-my/atool", "description": ""}},
+		map[string][]map[string]any{
+			"wow-look-at-my/atool": {{
+				"tag_name": "v1.0.0",
+				"assets":   []map[string]any{{"name": "atool_linux_amd64", "browser_download_url": "http://a"}},
+			}},
+		},
+	)
+
+	flagRecipient, flagIdentity := newTestKeyPair(t)
+	envRecipient, envIdentity := newTestKeyPair(t)
+	t.Setenv("WOW_MANIFEST_RECIPIENT", envRecipient)
+
+	tmp := t.TempDir()
+	out := filepath.Join(tmp, "manifest.age")
+	_, err := execute(t, "build-manifest", "--recipient", flagRecipient, "--output", out)
+	require.Nil(t, err)
+
+	data, err := os.ReadFile(out)
+	require.Nil(t, err)
+
+	// Both flag and env recipients should be honored.
+	_, err = manifest.Decrypt(data, flagIdentity)
+	assert.Nil(t, err)
+	_, err = manifest.Decrypt(data, envIdentity)
+	assert.Nil(t, err)
+}
+
+func TestSplitRecipients(t *testing.T) {
+	tests := []struct {
+		in   string
+		want []string
+	}{
+		{"a", []string{"a"}},
+		{"a\nb", []string{"a", "b"}},
+		{"a,b", []string{"a", "b"}},
+		{"a, b", []string{"a", "b"}},
+		{"a,\nb", []string{"a", "b"}},
+		{"  a  \n  b  ", []string{"a", "b"}},
+		{"", nil},
+		{",,\n\n", nil},
+	}
+	for _, tc := range tests {
+		got := splitRecipients(tc.in)
+		assert.Equal(t, tc.want, got)
+	}
 }
 
 func TestBuildManifest_SkipsDraftAndPrerelease(t *testing.T) {
