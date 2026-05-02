@@ -18,7 +18,6 @@ jobs:
           autorelease: 'true'
 
   pages:
-    if: github.ref == 'refs/heads/master'
     needs: ci
     uses: ./.github/workflows/deploy-manifest.yml
     with:
