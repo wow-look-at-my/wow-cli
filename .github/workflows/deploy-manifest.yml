@@ -36,7 +36,7 @@ jobs:
 
       - name: Install wow
         id: wow
-        uses: wow-look-at-my/actions/download-release-binary@v1
+        uses: wow-look-at-my/actions/download-release-binary@master
         with:
           repo: wow-look-at-my/wow-cli
           name: wow-cli
