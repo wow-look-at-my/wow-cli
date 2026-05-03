@@ -5,7 +5,8 @@
 {
   "$schema": "./recipients.schema.json",
   "recipients": [
-    {"name": "user", "key": "age1rsj232gwms2nwgghepqykg3ykwnnp2pjt59e7q6e06rdmefgypsqfkh4gk"}
-    {"name": "mattbook", "key": "age1lznynuy07gfypmfkwv3te5wdex95wdr8xwvnsa2ruenaamgfxq3slrss36"}
+    {"name": "user", "key": "age1rsj232gwms2nwgghepqykg3ykwnnp2pjt59e7q6e06rdmefgypsqfkh4gk"},
+    {"name": "mattbook", "key": "age1lznynuy07gfypmfkwv3te5wdex95wdr8xwvnsa2ruenaamgfxq3slrss36"},
+    {"name": "unraid", "key": "age1q8gfy0cptur3hmgms3ht36nuz5739zpqqqng4snvaunz5c4kfehqw5lw5c"}
   ]
 }
