@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     concurrency:
       group: pages
-      cancel-in-progress: true
+      cancel-in-progress: false
     env:
       SHOULD_DEPLOY: ${{ inputs.deploy-pages == 'true' || (inputs.deploy-pages == 'auto' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')) }}
     environment: ${{ (inputs.deploy-pages == 'true' || (inputs.deploy-pages == 'auto' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'))) && 'github-pages' || '' }}
