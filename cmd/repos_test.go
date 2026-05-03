@@ -197,9 +197,9 @@ func TestInstall_NoMatchInRepo_FallsBackToGitHub(t *testing.T) {
 	assert.Contains(t, out, "Installed")
 }
 
-// ---- update via repo -----------------------------------------------------
+// ---- upgrade via repo ----------------------------------------------------
 
-func TestUpdate_FromRepo_PicksUpNewVersion(t *testing.T) {
+func TestUpgrade_FromRepo_PicksUpNewVersion(t *testing.T) {
 	withTempState(t)
 
 	recipient, identity := newTestKeyPair(t)
@@ -221,21 +221,20 @@ func TestUpdate_FromRepo_PicksUpNewVersion(t *testing.T) {
 	repos.Add(&store.Repo{URL: manifestURL, Identity: identity})
 	require.NoError(t, repos.Save())
 
-	// Pre-existing installed package at v1.0.0 — wow update should bump it.
 	tmp := t.TempDir()
 	binPath := filepath.Join(tmp, "mytool")
 	pkgs, _ := store.Load()
 	pkgs.Add(&store.Package{Slug: "owner/mytool", Name: "mytool", Path: binPath, Version: "v1.0.0"})
 	require.NoError(t, pkgs.Save())
 
-	out, err := execute(t, "update")
+	out, err := execute(t, "upgrade")
 	require.Nil(t, err)
-	assert.Contains(t, out, "Updated mytool")
+	assert.Contains(t, out, "Upgraded mytool")
 	assert.Contains(t, out, "v2.0.0")
 	assert.True(t, strings.Contains(out, "from repo"))
 }
 
-func TestUpdate_FromRepo_AlreadyLatest(t *testing.T) {
+func TestUpgrade_FromRepo_AlreadyLatest(t *testing.T) {
 	withTempState(t)
 
 	recipient, identity := newTestKeyPair(t)
@@ -261,7 +260,7 @@ func TestUpdate_FromRepo_AlreadyLatest(t *testing.T) {
 	pkgs.Add(&store.Package{Slug: "owner/mytool", Name: "mytool", Path: "/tmp/mytool", Version: "v1.0.0"})
 	require.NoError(t, pkgs.Save())
 
-	out, err := execute(t, "update")
+	out, err := execute(t, "upgrade")
 	require.Nil(t, err)
 	assert.Contains(t, out, "already up to date")
 }
