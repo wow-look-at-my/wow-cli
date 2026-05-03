@@ -11,7 +11,7 @@ import (
 )
 
 func TestKeygen_OutputsParseableKeyPair(t *testing.T) {
-	out, err := execute(t, "keygen")
+	out, err := execute(t, "repo", "keygen")
 	require.Nil(t, err)
 
 	var recipient, identity string

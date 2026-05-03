@@ -64,15 +64,15 @@ a bare array of strings. The optional top-level `$schema` key is silently
 ignored — `recipients.schema.json` at the repo root provides editor validation. `manifest.Encrypt` takes `[]string` and emits a
 single ciphertext that any of the corresponding identities can decrypt —
 that's what makes per-user keys + revocation work. Each user holds their own
-`AGE-SECRET-KEY-...` identity and passes it to `wow add-src`.
+`AGE-SECRET-KEY-...` identity and passes it to `wow repo add`.
 
 Both halves are kept secret in this design (the manifest itself is meant to
 be private), so the "public/private" naming is loose: functionally it's a
 shared-recipient-set / per-user-identity scheme.
 
-`wow keygen` generates one keypair per invocation; run it N times to onboard
+`wow repo keygen` generates one keypair per invocation; run it N times to onboard
 N users. Revoke a user by removing their entry from `recipients.jsonc` and
-republishing. The pages workflow passes `--skip-if-empty` to build-manifest
+republishing. The pages workflow passes `--skip-if-empty` to `repo build`
 so initial setup (with zero recipients) doesn't break the pages deploy.
 
 ## Build version detection and self-update
@@ -91,11 +91,11 @@ Tests use these helpers in `cmd/cmd_test.go`, `cmd/sources_test.go`, and `cmd/bu
 - `withMockUpdater(t, binary, tag)` — injects a fake `go-selfupdate-mini` source with a single release
 - `withMockUpdaterPerSlug(t, perSlug)` — fake source returning different releases per slug
 - `withMockSearchServer(t, body)` — fake GitHub `/search/repositories` server (`ghSearchBaseURL`)
-- `withMockGitHub(t, items, releases)` — fake GitHub server covering both `/search/repositories` and `/repos/.../releases` (used by build-manifest tests)
+- `withMockGitHub(t, items, releases)` — fake GitHub server covering both `/search/repositories` and `/repos/.../releases` (used by `repo build` tests)
 - `newTestKeyPair(t)` — generates a fresh age X25519 keypair
 - `startManifestServer(t, m, recipient)` — encrypts m and serves it over HTTP
 - `startBinaryServer(t, body)` — serves arbitrary bytes (a fake release asset)
-- `resetBuildManifestFlags(t)` — restores cobra-bound flag vars between build-manifest tests
+- `resetBuildManifestFlags(t)` — restores cobra-bound flag vars between `repo build` tests
 - `execute(args...)` — runs a cobra command and returns stdout+stderr
 
 Always use `withTempState` in command tests to avoid touching real state.
@@ -106,6 +106,6 @@ Cobra binds flags to package-level vars; tests that set flags must restore them 
 
 `ci.yml` has two jobs. `ci` runs on every push: build, test, autorelease via `go-toolchain@v1`. `pages` runs only on master after `ci`, calling the reusable `deploy-manifest.yml` workflow with `deploy-pages: true`.
 
-`deploy-manifest.yml` is a reusable workflow (`workflow_call`) designed for any repo that needs an encrypted manifest. Inputs: `org` (required), `deploy-pages` (boolean, default false). It downloads the latest wow binary via `download-release-binary`, runs `build-manifest --org <org> --skip-if-empty`, uploads the manifest as a GHA artifact, and optionally deploys `pages/` to GitHub Pages. The calling repo must have a `pages/` directory and a `recipients.jsonc`.
+`deploy-manifest.yml` is a reusable workflow (`workflow_call`) designed for any repo that needs an encrypted manifest. Inputs: `org` (required), `deploy-pages` (boolean, default false). It downloads the latest wow binary via `download-release-binary`, runs `repo build --org <org> --skip-if-empty`, uploads the manifest as a GHA artifact, and optionally deploys `pages/` to GitHub Pages. The calling repo must have a `pages/` directory and a `recipients.jsonc`.
 
 The installer script is served at `https://wow-look-at-my.github.io/wow-cli/install.sh`; the encrypted manifest is at `https://wow-look-at-my.github.io/wow-cli/manifest.json.age` once `recipients.jsonc` has at least one entry.
