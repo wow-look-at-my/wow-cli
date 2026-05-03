@@ -25,7 +25,7 @@ var (
 )
 
 var buildManifestCmd = &cobra.Command{
-	Use:   "build-manifest",
+	Use:   "build",
 	Short: "Build (and encrypt) a manifest of installable packages",
 	Long: `Walk the configured org's repos, gather their releases, and write
 an age-encrypted manifest.
@@ -49,7 +49,7 @@ func init() {
 	buildManifestCmd.Flags().StringVar(&buildManifestOutput, "output", "-", "output file (\"-\" for stdout)")
 	buildManifestCmd.Flags().BoolVar(&buildManifestUnencrypt, "plain", false, "write plain JSON instead of encrypting")
 	buildManifestCmd.Flags().BoolVar(&buildManifestSkipIfEmpty, "skip-if-empty", false, "exit 0 without writing output when no recipients are configured")
-	rootCmd.AddCommand(buildManifestCmd)
+	repoCmd.AddCommand(buildManifestCmd)
 }
 
 func runBuildManifest(cmd *cobra.Command, _ []string) error {
@@ -224,7 +224,7 @@ func fetchReleases(ctx context.Context, slug string) ([]ghRelease, error) {
 }
 
 // ghSearchItem is a slimmed copy of GitHub's repo search hit. Defined here
-// (separately from search.go's anonymous struct) so build-manifest can pass
+// (separately from search.go's anonymous struct) so repo build can pass
 // items between functions without depending on search.go's internals.
 type ghSearchItem struct {
 	FullName    string `json:"full_name"`

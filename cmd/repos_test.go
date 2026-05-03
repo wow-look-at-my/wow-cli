@@ -53,7 +53,7 @@ func platformAsset(binary string) string {
 	return binary + suffix
 }
 
-// ---- add-src / list-src / remove-src -------------------------------------
+// ---- repo add / repo list / repo remove ----------------------------------
 
 func TestAddSrc_AddsAndPersists(t *testing.T) {
 	withTempState(t)
@@ -62,7 +62,7 @@ func TestAddSrc_AddsAndPersists(t *testing.T) {
 	m := manifest.New()
 	url := startManifestServer(t, m, recipient)
 
-	out, err := execute(t, "add-src", url, identity)
+	out, err := execute(t, "repo", "add", url, identity)
 	require.Nil(t, err)
 	assert.Contains(t, out, "Added repo")
 
@@ -78,7 +78,7 @@ func TestAddSrc_RejectsBadKey(t *testing.T) {
 
 	url := startManifestServer(t, manifest.New(), recipient)
 
-	_, err := execute(t, "add-src", url, otherIdentity)
+	_, err := execute(t, "repo", "add", url, otherIdentity)
 	assert.NotNil(t, err)
 
 	// Repo should NOT have been saved when verification fails.
@@ -89,13 +89,13 @@ func TestAddSrc_RejectsBadKey(t *testing.T) {
 func TestAddSrc_UnreachableURL(t *testing.T) {
 	withTempState(t)
 	_, identity := newTestKeyPair(t)
-	_, err := execute(t, "add-src", "http://127.0.0.1:1/nope", identity)
+	_, err := execute(t, "repo", "add", "http://127.0.0.1:1/nope", identity)
 	assert.NotNil(t, err)
 }
 
 func TestListSrc_Empty(t *testing.T) {
 	withTempState(t)
-	out, err := execute(t, "list-src")
+	out, err := execute(t, "repo", "list")
 	require.Nil(t, err)
 	assert.Contains(t, out, "No repos configured")
 }
@@ -106,7 +106,7 @@ func TestListSrc_PrintsTruncatedKey(t *testing.T) {
 	s.Add(&store.Repo{URL: "https://example/manifest.age", Identity: "AGE-SECRET-KEY-VERYLONGSECRETSTRINGTHATSHOULDBETRUNCATED"})
 	require.NoError(t, s.Save())
 
-	out, err := execute(t, "list-src")
+	out, err := execute(t, "repo", "list")
 	require.Nil(t, err)
 	assert.Contains(t, out, "https://example/manifest.age")
 	assert.Contains(t, out, "...")
@@ -120,7 +120,7 @@ func TestRemoveSrc_Removes(t *testing.T) {
 	s.Add(&store.Repo{URL: "https://b", Identity: "AGE-SECRET-KEY-2"})
 	require.NoError(t, s.Save())
 
-	out, err := execute(t, "remove-src", "https://a")
+	out, err := execute(t, "repo", "remove", "https://a")
 	require.Nil(t, err)
 	assert.Contains(t, out, "Removed repo")
 
@@ -131,7 +131,7 @@ func TestRemoveSrc_Removes(t *testing.T) {
 
 func TestRemoveSrc_NotConfigured(t *testing.T) {
 	withTempState(t)
-	_, err := execute(t, "remove-src", "https://nope")
+	_, err := execute(t, "repo", "remove", "https://nope")
 	assert.NotNil(t, err)
 }
 

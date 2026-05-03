@@ -12,7 +12,7 @@ import (
 )
 
 var addSrcCmd = &cobra.Command{
-	Use:   "add-src <url> <key>",
+	Use:   "add <url> <key>",
 	Short: "Add an encrypted manifest repo",
 	Long: `Add a remote encrypted-manifest repo so wow can install packages
 without calling the GitHub API.
@@ -28,7 +28,7 @@ since it grants read access to the manifest contents.`,
 }
 
 func init() {
-	rootCmd.AddCommand(addSrcCmd)
+	repoCmd.AddCommand(addSrcCmd)
 }
 
 func runAddSrc(cmd *cobra.Command, args []string) error {

@@ -94,44 +94,44 @@ wow --version
 
 `wow` can install packages from an encrypted manifest hosted at any URL, with no GitHub API access required at install time. The manifest is JSON encrypted with [age](https://age-encryption.org), distributed along with a key that decrypts it.
 
-#### `add-src <url> <key>`
+#### `repo add <url> <key>`
 
 Register an encrypted-manifest repo. `key` is the age identity (private key, `AGE-SECRET-KEY-...`) that decrypts the manifest at `url`. The repo is fetched and decrypted immediately to verify the key is valid.
 
 ```sh
-wow add-src https://wow-look-at-my.github.io/wow-cli/manifest.json.age AGE-SECRET-KEY-...
+wow repo add https://wow-look-at-my.github.io/wow-cli/manifest.json.age AGE-SECRET-KEY-...
 ```
 
-#### `remove-src <url>`
+#### `repo remove <url>`
 
 Remove a configured repo.
 
 ```sh
-wow remove-src https://wow-look-at-my.github.io/wow-cli/manifest.json.age
+wow repo remove https://wow-look-at-my.github.io/wow-cli/manifest.json.age
 ```
 
-#### `list-src`
+#### `repo list`
 
 List configured repos. The decryption key is shown truncated.
 
 ```sh
-wow list-src
+wow repo list
 ```
 
-#### `keygen`
+#### `repo keygen`
 
-Generate a fresh age X25519 keypair for publishing a manifest. Prints both halves; the recipient is what your CI uses to encrypt, the identity is what one user passes to `add-src`. Run it once per user.
+Generate a fresh age X25519 keypair for publishing a manifest. Prints both halves; the recipient is what your CI uses to encrypt, the identity is what one user passes to `repo add`. Run it once per user.
 
 ```sh
-wow keygen
+wow repo keygen
 ```
 
-#### `build-manifest`
+#### `repo build`
 
 Walk a GitHub org's repos, gather their releases, and emit an age-encrypted manifest. Used by CI to refresh the published manifest. Recipients come from `recipients.jsonc` (one entry per authorized user) and from any `--recipient` flags; both sources are merged.
 
 ```sh
-wow build-manifest --org wow-look-at-my --output manifest.json.age
+wow repo build --org wow-look-at-my --output manifest.json.age
 ```
 
 Flags:
@@ -163,9 +163,9 @@ A JSON Schema (`recipients.schema.json`) ships in the repo root for editor valid
 
 ### Setting up a private package repo
 
-1. For each user who should be able to install from the manifest, run `wow keygen` once. Each invocation prints a unique recipient/identity pair.
+1. For each user who should be able to install from the manifest, run `wow repo keygen` once. Each invocation prints a unique recipient/identity pair.
 2. PR each user's recipient (`age1...`) into `recipients.jsonc` with a name and optional note. The included [CI workflow](.github/workflows/ci.yml) encrypts the manifest to everyone in that file and publishes `manifest.json.age` to GitHub Pages on every push to master.
-3. Distribute each identity (`AGE-SECRET-KEY-...`) out-of-band to its corresponding user. They run `wow add-src <pages url>/manifest.json.age <their identity>` to start installing from your manifest without hitting the GitHub API.
+3. Distribute each identity (`AGE-SECRET-KEY-...`) out-of-band to its corresponding user. They run `wow repo add <pages url>/manifest.json.age <their identity>` to start installing from your manifest without hitting the GitHub API.
 
 To revoke a user, send a PR removing their entry from `recipients.jsonc`. On the next deploy, the new manifest no longer encrypts to their key; their copy of the file becomes useless. Other users' identities keep working.
 

@@ -8,14 +8,14 @@ import (
 )
 
 var removeSrcCmd = &cobra.Command{
-	Use:   "remove-src <url>",
+	Use:   "remove <url>",
 	Short: "Remove a configured manifest repo",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runRemoveSrc,
 }
 
 func init() {
-	rootCmd.AddCommand(removeSrcCmd)
+	repoCmd.AddCommand(removeSrcCmd)
 }
 
 func runRemoveSrc(cmd *cobra.Command, args []string) error {
