@@ -6,9 +6,6 @@ import (
 )
 
 func init() {
-	if v := autoreleaseVersion(); v != "" {
-		selfupdate.EmbeddedVersion = v
-	}
 	selfupdate.RegisterCommands(rootCmd, selfupdate.ParseSlug("wow-look-at-my/wow-cli"))
 	// RegisterCommands also registers single-binary install/update; we already
 	// have package-aware versions of those, so drop the library's duplicates.

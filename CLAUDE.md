@@ -79,7 +79,7 @@ so initial setup (with zero recipients) doesn't break the pages deploy.
 
 `cmd/version.go`'s `init()` calls `selfupdate.RegisterCommands(rootCmd, slug)` and then drops the library's `install` and `update` commands (we have package-aware versions of both). The library's `version` command stays and serves `wow version` and `wow --version`.
 
-`cmd/version.go`'s `init()` sets `selfupdate.EmbeddedVersion` via `autoreleaseVersion()` (in `cmd/version_detect.go`) before calling `RegisterCommands`. This derives `v0.0.<unix-seconds>` from `runtime/debug.BuildInfo.Settings["vcs.time"]`, matching the autorelease tag scheme. Without this, Go populates `Main.Version` with a pseudo-version (`v0.0.0-YYYYMMDDHHMMSS-shortsha`) for binaries built from a VCS checkout, and the library's `CurrentVersion()` returns that pseudo-version instead of the release tag.
+go-selfupdate-mini detects the running binary's version itself: `selfupdate.CurrentVersion()` reads `runtime/debug.ReadBuildInfo()` and, when `Main.Version` is missing/`(devel)`/a Go pseudo-version, formats `vcs.time` as `v0.0.<unix-seconds>` (matching the autorelease tag scheme), with `+dirty` appended for modified working trees. We do not need to populate `EmbeddedVersion` ourselves; the library's autorelease branch produces the right format directly from VCS info.
 
 `cmd/update.go`'s `selfUpdateWow` short-circuits on empty / `(devel)` / `+dirty` versions so dev builds are never silently overwritten. The actual self-update goes through `up.UpdateCommand(ctx, exePath, current, slug)` so tests can inject `wowExePathOverride` instead of letting the library resolve `os.Executable()` to the test binary.
 
