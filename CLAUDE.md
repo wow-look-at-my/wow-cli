@@ -41,9 +41,9 @@ Each command file registers itself via `init()` — do not add registration call
 
 State directory resolution order: `$WOW_STATE_DIR` → `$XDG_DATA_HOME/wow` → `~/.local/share/wow`.
 
-## Install / update flow
+## Install / upgrade flow
 
-`runInstall` and `updateOne` first call `repoCache.find(ctx, slug, binary, tag)`. The cache:
+`runInstall` and `upgradeOne` first call `repoCache.find(ctx, slug, binary, tag)`. The cache:
 
 1. Loads `repos.json` (once per command run).
 2. For each configured repo, fetches & decrypts the manifest (memoized by URL).
@@ -51,8 +51,15 @@ State directory resolution order: `$WOW_STATE_DIR` → `$XDG_DATA_HOME/wow` → 
 
 If the cache returns nil (no repo matched), the existing GitHub-API path runs (`detectLatest` / `DetectVersion` via go-selfupdate-mini).
 
-`update` reuses one `repoCache` across all installed packages so the same
+`upgrade` reuses one `repoCache` across all installed packages so the same
 manifest URL isn't re-fetched per package.
+
+## Search
+
+`wow search` lists packages from configured manifest sources (added via
+`wow repo add`). It does NOT query the public GitHub API. Use `--repo <url>`
+to restrict results to a single configured source. Query argument filters by
+slug or description (case-insensitive substring match).
 
 ## Encrypted manifest format
 
@@ -77,20 +84,19 @@ so initial setup (with zero recipients) doesn't break the pages deploy.
 
 ## Build version detection and self-update
 
-`cmd/version.go`'s `init()` calls `selfupdate.RegisterCommands(rootCmd, slug)` and then drops the library's `install` and `update` commands (we have package-aware versions of both). The library's `version` command stays and serves `wow version` and `wow --version`.
+`cmd/version.go`'s `init()` calls `selfupdate.RegisterCommands(rootCmd, slug)` and then drops the library's `install` command (we have a package-aware version). The library's `version` and `update` commands stay: `wow version` / `wow --version` shows build info, `wow update` self-updates wow-cli via go-selfupdate-mini.
 
 go-selfupdate-mini detects the running binary's version itself: `selfupdate.CurrentVersion()` reads `runtime/debug.ReadBuildInfo()` and, when `Main.Version` is missing/`(devel)`/a Go pseudo-version, formats `vcs.time` as `v0.0.<unix-seconds>` (matching the autorelease tag scheme), with `+dirty` appended for modified working trees. We do not need to populate `EmbeddedVersion` ourselves; the library's autorelease branch produces the right format directly from VCS info.
 
-`cmd/update.go`'s `selfUpdateWow` short-circuits on empty / `(devel)` / `+dirty` versions so dev builds are never silently overwritten. The actual self-update goes through `up.UpdateCommand(ctx, exePath, current, slug)` so tests can inject `wowExePathOverride` instead of letting the library resolve `os.Executable()` to the test binary.
-
 ## Testing
 
-Tests use these helpers in `cmd/cmd_test.go`, `cmd/sources_test.go`, and `cmd/build_manifest_test.go`:
+Tests use these helpers in `cmd/cmd_test.go`, `cmd/repos_test.go`, and `cmd/build_manifest_test.go`:
 
 - `withTempState(t)` — sets `WOW_STATE_DIR` to an isolated temp dir
 - `withMockUpdater(t, binary, tag)` — injects a fake `go-selfupdate-mini` source with a single release
 - `withMockUpdaterPerSlug(t, perSlug)` — fake source returning different releases per slug
-- `withMockSearchServer(t, body)` — fake GitHub `/search/repositories` server (`ghSearchBaseURL`)
+- `withManifestSearch(t, m)` — sets up a temp state with one encrypted manifest repo for search tests
+- `withMockSearchServer(t, body)` — fake GitHub `/search/repositories` server (`ghSearchBaseURL`; used by install's "did you mean" flow)
 - `withMockGitHub(t, items, releases)` — fake GitHub server covering both `/search/repositories` and `/repos/.../releases` (used by `repo build` tests)
 - `newTestKeyPair(t)` — generates a fresh age X25519 keypair
 - `startManifestServer(t, m, recipient)` — encrypts m and serves it over HTTP

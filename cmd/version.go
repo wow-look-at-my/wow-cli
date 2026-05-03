@@ -1,20 +1,16 @@
 package cmd
 
-import (
-	"github.com/spf13/cobra"
-	selfupdate "github.com/wow-look-at-my/go-selfupdate-mini"
-)
+import selfupdate "github.com/wow-look-at-my/go-selfupdate-mini"
 
 func init() {
 	selfupdate.RegisterCommands(rootCmd, selfupdate.ParseSlug("wow-look-at-my/wow-cli"))
-	// RegisterCommands also registers single-binary install/update; we already
-	// have package-aware versions of those, so drop the library's duplicates.
-	var dupes []*cobra.Command
+	// RegisterCommands also registers a single-binary install command; we
+	// already have a package-aware version of install, so drop that one.
+	// The library's update and version commands stay.
 	for _, c := range rootCmd.Commands() {
-		switch c.Short {
-		case "Install the binary from a GitHub release", "Update the binary to the latest version":
-			dupes = append(dupes, c)
+		if c.Short == "Install the binary from a GitHub release" {
+			rootCmd.RemoveCommand(c)
+			break
 		}
 	}
-	rootCmd.RemoveCommand(dupes...)
 }
