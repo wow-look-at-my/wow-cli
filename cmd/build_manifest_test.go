@@ -98,7 +98,7 @@ func TestBuildManifest_Plain(t *testing.T) {
 
 	tmp := t.TempDir()
 	out := filepath.Join(tmp, "manifest.json")
-	_, err := execute(t, "build-manifest", "--plain", "--output", out, "--recipients-file", "")
+	_, err := execute(t, "repo", "build", "--plain", "--output", out, "--recipients-file", "")
 	require.Nil(t, err)
 
 	data, err := os.ReadFile(out)
@@ -133,7 +133,7 @@ func TestBuildManifest_EncryptedRoundtrip(t *testing.T) {
 	recipient, identity := newTestKeyPair(t)
 	tmp := t.TempDir()
 	out := filepath.Join(tmp, "manifest.age")
-	_, err := execute(t, "build-manifest", "--recipient", recipient, "--recipients-file", "", "--output", out)
+	_, err := execute(t, "repo", "build", "--recipient", recipient, "--recipients-file", "", "--output", out)
 	require.Nil(t, err)
 
 	data, err := os.ReadFile(out)
@@ -166,7 +166,7 @@ func TestBuildManifest_RecipientsFromFile(t *testing.T) {
 	)
 
 	out := filepath.Join(tmp, "manifest.age")
-	_, err := execute(t, "build-manifest", "--recipients-file", recFile, "--output", out)
+	_, err := execute(t, "repo", "build", "--recipients-file", recFile, "--output", out)
 	require.Nil(t, err)
 
 	data, err := os.ReadFile(out)
@@ -197,7 +197,7 @@ func TestBuildManifest_FileMergedWithFlag(t *testing.T) {
 	recFile := writeRecipientsFile(t, tmp, manifest.Recipient{Name: "fileuser", Key: rFile})
 
 	out := filepath.Join(tmp, "manifest.age")
-	_, err := execute(t, "build-manifest",
+	_, err := execute(t, "repo", "build",
 		"--recipients-file", recFile,
 		"--recipient", rFlag,
 		"--output", out,
@@ -217,7 +217,7 @@ func TestBuildManifest_NoRecipientsErrors(t *testing.T) {
 	withTempState(t)
 	resetBuildManifestFlags(t)
 	withMockGitHub(t, nil, nil)
-	_, err := execute(t, "build-manifest", "--recipients-file", "")
+	_, err := execute(t, "repo", "build", "--recipients-file", "")
 	require.NotNil(t, err)
 	assert.Contains(t, err.Error(), "no recipients")
 }
@@ -229,7 +229,7 @@ func TestBuildManifest_SkipIfEmpty(t *testing.T) {
 
 	tmp := t.TempDir()
 	out := filepath.Join(tmp, "manifest.age")
-	_, err := execute(t, "build-manifest",
+	_, err := execute(t, "repo", "build",
 		"--recipients-file", "",
 		"--output", out,
 		"--skip-if-empty",
@@ -249,14 +249,14 @@ func TestBuildManifest_MissingFileIsBenign_ButStillNeedsRecipient(t *testing.T) 
 
 	missing := filepath.Join(t.TempDir(), "does-not-exist.json")
 	// Missing file alone => no recipients => error.
-	_, err := execute(t, "build-manifest", "--recipients-file", missing)
+	_, err := execute(t, "repo", "build", "--recipients-file", missing)
 	require.NotNil(t, err)
 
 	// Missing file + --recipient flag => fine.
 	resetBuildManifestFlags(t) // reset before re-running
 	r, _ := newTestKeyPair(t)
 	out := filepath.Join(t.TempDir(), "m.age")
-	_, err = execute(t, "build-manifest",
+	_, err = execute(t, "repo", "build",
 		"--recipients-file", missing,
 		"--recipient", r,
 		"--output", out,
@@ -279,7 +279,7 @@ func TestBuildManifest_FileWithBadKeyErrors(t *testing.T) {
 	tmp := t.TempDir()
 	recFile := writeRecipientsFile(t, tmp, manifest.Recipient{Name: "bad", Key: "not-a-real-key"})
 
-	_, err := execute(t, "build-manifest", "--recipients-file", recFile, "--output", filepath.Join(tmp, "m.age"))
+	_, err := execute(t, "repo", "build", "--recipients-file", recFile, "--output", filepath.Join(tmp, "m.age"))
 	require.NotNil(t, err)
 }
 
@@ -310,7 +310,7 @@ func TestBuildManifest_IncludeFilter(t *testing.T) {
 
 	tmp := t.TempDir()
 	out := filepath.Join(tmp, "manifest.json")
-	_, err := execute(t, "build-manifest", "--plain", "--recipients-file", "", "--output", out, "--include", "*tool")
+	_, err := execute(t, "repo", "build", "--plain", "--recipients-file", "", "--output", out, "--include", "*tool")
 	require.Nil(t, err)
 
 	data, err := os.ReadFile(out)
@@ -340,7 +340,7 @@ func TestBuildManifest_SkipsDraftAndPrerelease(t *testing.T) {
 
 	tmp := t.TempDir()
 	out := filepath.Join(tmp, "manifest.json")
-	_, err := execute(t, "build-manifest", "--plain", "--recipients-file", "", "--output", out)
+	_, err := execute(t, "repo", "build", "--plain", "--recipients-file", "", "--output", out)
 	require.Nil(t, err)
 
 	data, err := os.ReadFile(out)

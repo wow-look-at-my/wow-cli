@@ -8,7 +8,7 @@ import (
 )
 
 var listSrcCmd = &cobra.Command{
-	Use:   "list-src",
+	Use:   "list",
 	Short: "List configured manifest repos",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
@@ -29,5 +29,5 @@ var listSrcCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(listSrcCmd)
+	repoCmd.AddCommand(listSrcCmd)
 }

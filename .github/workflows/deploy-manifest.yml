@@ -45,7 +45,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           chmod +x build/wow-cli_linux_amd64
-          args=(build-manifest --org "${{ inputs.org }}" --output pages/manifest.json.age --skip-if-empty)
+          args=(repo build --org "${{ inputs.org }}" --output pages/manifest.json.age --skip-if-empty)
           for pattern in ${{ inputs.include }}; do
             args+=(--include "$pattern")
           done
