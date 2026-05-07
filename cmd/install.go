@@ -102,6 +102,9 @@ func installFromGitHub(cmd *cobra.Command, input, slug, name, dest string) error
 		fmt.Fprintf(cmd.OutOrStdout(), "Fetching latest release for %s...\n", slug)
 		rel, err = detectLatest(slug)
 		if err != nil {
+			if strings.Contains(input, "/") {
+				return err
+			}
 			slug, rel, err = suggestAndConfirm(cmd, input, slug, detectLatest)
 			if err != nil {
 				return err
