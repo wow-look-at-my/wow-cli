@@ -84,7 +84,7 @@ so initial setup (with zero recipients) doesn't break the pages deploy.
 
 ## Build version detection and self-update
 
-`cmd/version.go`'s `init()` calls `selfupdate.RegisterCommands(rootCmd, slug)` and then drops the library's `install` command (we have a package-aware version). The library's `version` and `update` commands stay: `wow version` / `wow --version` shows build info, `wow update` self-updates wow-cli via go-selfupdate-mini.
+`cmd/version.go`'s `init()` calls `selfupdate.RegisterCommands(rootCmd, slug)`. The library's `version` and `update` commands are registered: `wow version` / `wow --version` shows build info, `wow update` self-updates wow-cli via go-selfupdate-mini.
 
 go-selfupdate-mini detects the running binary's version itself: `selfupdate.CurrentVersion()` reads `runtime/debug.ReadBuildInfo()` and, when `Main.Version` is missing/`(devel)`/a Go pseudo-version, formats `vcs.time` as `v0.0.<unix-seconds>` (matching the autorelease tag scheme), with `+dirty` appended for modified working trees. We do not need to populate `EmbeddedVersion` ourselves; the library's autorelease branch produces the right format directly from VCS info.
 
