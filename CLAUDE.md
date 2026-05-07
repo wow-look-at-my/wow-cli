@@ -110,7 +110,7 @@ Cobra binds flags to package-level vars; tests that set flags must restore them 
 
 ## CI
 
-`ci.yml` has two jobs. `ci` runs on every push: build, test, autorelease via `go-toolchain@v1`. `pages` runs only on master after `ci`, calling the reusable `deploy-manifest.yml` workflow with `deploy-pages: true`.
+`ci.yml` has two jobs plus `workflow_dispatch`. `ci` runs on every push: build, test, autorelease via `go-toolchain@v1`. `manifest` runs after `ci` and calls the reusable `deploy-manifest.yml` workflow; it builds the manifest on every push but only deploys it to GitHub Pages on master/main (deploy-pages defaults to `'auto'`). `workflow_dispatch` allows triggering CI (and thus a manifest rebuild + deploy) manually from the GitHub UI or `gh workflow run`.
 
 `deploy-manifest.yml` is a reusable workflow (`workflow_call`) designed for any repo that needs an encrypted manifest. Inputs: `org` (required), `deploy-pages` (boolean, default false). It downloads the latest wow binary via `download-release-binary`, runs `repo build --org <org> --skip-if-empty`, uploads the manifest as a GHA artifact, and optionally deploys `pages/` to GitHub Pages. The calling repo must have a `pages/` directory and a `recipients.jsonc`.
 
