@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	filippo.io/age v1.2.1
 	github.com/spf13/cobra v1.10.2
-	github.com/wow-look-at-my/go-selfupdate-mini v0.0.0-20260503110703-a14ac7910e2f
+	github.com/wow-look-at-my/go-selfupdate-mini v0.0.0-20260507224846-747f99b107fd
 	github.com/wow-look-at-my/testify v0.0.0-20260217010200-5fd2c08e3abb
 )
 
